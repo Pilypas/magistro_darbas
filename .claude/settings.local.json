@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:www.zurnalai.vu.lt)",
+      "Bash(py -m pip install:*)",
+      "Bash(dir)",
+      "Bash(dir:*)",
+      "Bash(pip install:*)",
+      "Bash(python:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

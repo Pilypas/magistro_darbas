@@ -1,0 +1,1072 @@
+<!DOCTYPE html>
+<html lang="lt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Imputacija - Trūkstamų reikšmių užpildymas</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .navbar-brand {
+            font-weight: bold;
+        }
+        .navbar-nav .nav-link {
+            font-weight: 500;
+            transition: color 0.3s ease;
+        }
+        .navbar-nav .nav-link:hover {
+            color: #0d6efd !important;
+        }
+        .navbar {
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        body {
+            padding-top: 80px;
+        }
+        
+        .upload-area {
+            border: 2px dashed #007bff;
+            border-radius: 10px;
+            padding: 40px;
+            text-align: center;
+            margin: 20px 0;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .upload-area:hover {
+            background-color: #f8f9fa;
+        }
+        .upload-area.dragover {
+            border-color: #28a745;
+            background-color: #d4edda;
+        }
+        .plot-container {
+            margin: 20px 0;
+            text-align: center;
+        }
+        .plot-container img {
+            max-width: 100%;
+            height: auto;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .stats-card {
+            margin: 10px 0;
+        }
+        .loading {
+            display: none;
+        }
+        .progress-section {
+            margin: 20px 0;
+        }
+        .feature-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-light bg-white fixed-top">
+        <div class="container">
+            <a class="navbar-brand" href="/">
+                <i class="fas fa-chart-line text-primary me-2"></i>
+                Duomenų analizės sistema
+            </a>
+            
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">
+                            <i class="fas fa-home me-1"></i>
+                            Pradžia
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/imputacija">
+                            <i class="fas fa-magic me-1"></i>
+                            Imputacija
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/apie">
+                            <i class="fas fa-info-circle me-1"></i>
+                            Apie
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <div class="row">
+            <div class="col-12">
+                <h1 class="text-center mb-4">
+                    <i class="fas fa-tree text-success me-2"></i> 
+                    <i class="fas fa-bolt text-warning me-2"></i>
+                    Trūkstamų reikšmių užpildymas
+                </h1>
+                <p class="text-center text-muted mb-4">
+                    Įkelkite CSV duomenis ir atlikite trūkstamų reikšmių užpildymą naudojant Random Forest arba XGBoost algoritmus
+                </p>
+            </div>
+        </div>
+
+        <!-- File Upload Section -->
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5><i class="fas fa-upload"></i> Duomenų įkėlimas</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="upload-area" id="uploadArea">
+                            <i class="fas fa-cloud-upload-alt fa-3x text-primary mb-3"></i>
+                            <h5>Vilkite CSV failą čia arba spustelėkite naršymui</h5>
+                            <p class="text-muted">Maksimalus failo dydis: 16MB</p>
+                            <input type="file" id="fileInput" accept=".csv" style="display: none;">
+                        </div>
+                        
+                        <div class="loading" id="uploadLoading">
+                            <div class="d-flex align-items-center">
+                                <div class="spinner-border text-primary me-2" role="status"></div>
+                                <span>Įkeliamas ir analizuojamas failas...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Data Overview Section -->
+        <div class="row" id="dataOverview" style="display: none;">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5><i class="fas fa-chart-bar"></i> Duomenų apžvalga</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row" id="statsCards"></div>
+                        <div class="row mt-3">
+                            <div class="col-12">
+                                <button class="btn btn-info me-2" onclick="analyzeData()">
+                                    <i class="fas fa-search"></i> Detali analizė
+                                </button>
+                                <button class="btn btn-success" onclick="showImputeModal()">
+                                    <i class="fas fa-magic"></i> Užpildyti trūkstamas reikšmes
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Analysis Results Section -->
+        <div class="row" id="analysisResults" style="display: none;">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5><i class="fas fa-chart-line"></i> Duomenų analizės rezultatai</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="analysisPlots"></div>
+                        <div id="missingByColumnTable"></div>
+                        <div id="summaryStats"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Imputation Progress Section -->
+        <div class="row" id="imputationProgress" style="display: none;">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5><i class="fas fa-cog fa-spin"></i> Užpildymo procesas</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <h6 id="progressTitle">Inicijuojamas užpildymo procesas...</h6>
+                            <div class="progress mb-3" style="height: 30px;">
+                                <div class="progress-bar progress-bar-striped progress-bar-animated bg-success" 
+                                     role="progressbar" 
+                                     id="progressBar"
+                                     style="width: 0%">
+                                    <span id="progressText">0%</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="progressDetails">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <small class="text-muted">
+                                        <i class="fas fa-clock"></i> Pradėta: <span id="startTime">-</span>
+                                    </small>
+                                </div>
+                                <div class="col-md-6 text-end">
+                                    <small class="text-muted">
+                                        <i class="fas fa-hourglass-half"></i> Numatomas laikas: <span id="estimatedTime">Skaičiuojama...</span>
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="currentStep" class="mt-3">
+                            <small class="text-info">
+                                <i class="fas fa-info-circle"></i> <span id="stepDescription">Ruošiami duomenys...</span>
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Imputation Results Section -->
+        <div class="row" id="imputationResults" style="display: none;">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5><i class="fas fa-check-circle"></i> Užpildymo rezultatai</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="alert alert-success" role="alert">
+                            <h6><i class="fas fa-check-circle"></i> Užpildymas sėkmingai baigtas!</h6>
+                            <div class="row">
+                                <div class="col-md-3">
+                                    <small><strong>Modelis:</strong> <span id="finalModelType">-</span></small>
+                                </div>
+                                <div class="col-md-3">
+                                    <small><strong>Pradėta:</strong> <span id="finalStartTime">-</span></small>
+                                </div>
+                                <div class="col-md-3">
+                                    <small><strong>Baigta:</strong> <span id="finalEndTime">-</span></small>
+                                </div>
+                                <div class="col-md-3">
+                                    <small><strong>Trukmė:</strong> <span id="totalDuration">-</span></small>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="imputationPlots"></div>
+                        <div id="modelPerformance" style="display: none;"></div>
+                        <div id="featureImportance" style="display: none;"></div>
+                        <div class="mt-3">
+                            <button class="btn btn-primary" id="downloadBtn" style="display: none;">
+                                <i class="fas fa-download"></i> Atsisiųsti apdorotus duomenis
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Imputation Settings Modal -->
+    <div class="modal fade" id="imputeModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-cogs me-2"></i>
+                        Užpildymo nustatymai
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-12 mb-4">
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle me-2"></i>
+                                <strong>Algoritmų palyginimas:</strong> Random Forest paprastai geresnis mažiems duomenims, 
+                                XGBoost - didesniems ir sudėtingesniems duomenims.
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">
+                                    <i class="fas fa-robot me-1"></i>
+                                    Modelio tipas
+                                </label>
+                                <select class="form-select" id="modelType">
+                                    <option value="random_forest" selected>
+                                        <i class="fas fa-tree"></i> Random Forest (Rekomenduojama)
+                                    </option>
+                                    <option value="xgboost">
+                                        <i class="fas fa-bolt"></i> XGBoost (Pažangus)
+                                    </option>
+                                </select>
+                                <div class="form-text">
+                                    Pasirinkite mašininio mokymosi algoritmą trūkstamų reikšmių užpildymui
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">
+                                    <i class="fas fa-seedling me-1"></i>
+                                    Medžių skaičius (n_estimators)
+                                </label>
+                                <input type="number" class="form-control" id="nEstimators" value="100" min="10" max="1000">
+                                <div class="form-text">
+                                    Daugiau medžių = geresnis tikslumas, bet ilgesnė trukmė
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">
+                                    <i class="fas fa-dice me-1"></i>
+                                    Atsitiktinumo būsena
+                                </label>
+                                <input type="number" class="form-control" id="randomState" value="42">
+                                <div class="form-text">
+                                    Kartojamų rezultatų užtikrinimui (palikite 42)
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">
+                                    <i class="fas fa-layer-group me-1"></i>
+                                    Maksimalus gylis
+                                </label>
+                                <select class="form-select" id="maxDepth">
+                                    <option value="">Automatinis (rekomenduojama)</option>
+                                    <option value="3">3 (greitas)</option>
+                                    <option value="5">5 (vidutinis)</option>
+                                    <option value="10">10 (lėtas, bet tikslus)</option>
+                                </select>
+                                <div class="form-text">
+                                    Modelio sudėtingumas. Automatinis - optimaliausias
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-12">
+                            <div class="card bg-light">
+                                <div class="card-body">
+                                    <h6><i class="fas fa-chart-bar me-1"></i>Numatoma trukmė:</h6>
+                                    <p class="mb-0" id="estimatedDuration">
+                                        <i class="fas fa-clock me-1"></i>
+                                        Priklausomai nuo duomenų dydžio: 30s - 5min
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-1"></i>
+                        Atšaukti
+                    </button>
+                    <button type="button" class="btn btn-success" onclick="performImputation()">
+                        <i class="fas fa-magic me-1"></i> 
+                        Pradėti užpildymą
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="bg-dark text-light py-4 mt-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-md-6">
+                    <h5><i class="fas fa-chart-line me-2"></i>Duomenų analizės sistema</h5>
+                    <p class="text-muted">
+                        Pažangus trūkstamų reikšmių užpildymas naudojant mašininio mokymosi algoritmus.
+                    </p>
+                </div>
+                <div class="col-md-3">
+                    <h6>Funkcijos</h6>
+                    <ul class="list-unstyled">
+                        <li><a href="/imputacija" class="text-light text-decoration-none">
+                            <i class="fas fa-magic me-1"></i>Random Forest
+                        </a></li>
+                        <li><a href="/imputacija" class="text-light text-decoration-none">
+                            <i class="fas fa-bolt me-1"></i>XGBoost
+                        </a></li>
+                        <li class="text-muted">
+                            <i class="fas fa-chart-bar me-1"></i>Analizė
+                        </li>
+                    </ul>
+                </div>
+                <div class="col-md-3">
+                    <h6>Nuorodos</h6>
+                    <ul class="list-unstyled">
+                        <li><a href="/" class="text-light text-decoration-none">
+                            <i class="fas fa-home me-1"></i>Pradžia
+                        </a></li>
+                        <li><a href="/apie" class="text-light text-decoration-none">
+                            <i class="fas fa-info-circle me-1"></i>Apie projektą
+                        </a></li>
+                        <li><a href="https://github.com" class="text-light text-decoration-none" target="_blank">
+                            <i class="fab fa-github me-1"></i>GitHub
+                        </a></li>
+                    </ul>
+                </div>
+            </div>
+            <hr class="my-4">
+            <div class="row align-items-center">
+                <div class="col-md-6">
+                    <p class="mb-0 text-muted">
+                        &copy; 2024 Duomenų analizės sistema. Visi teisės rezervuotos.
+                    </p>
+                </div>
+                <div class="col-md-6 text-end">
+                    <small class="text-muted">
+                        Sukurta su <i class="fas fa-heart text-danger"></i> ir mašininiu mokymuisi
+                    </small>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let currentFilename = null;
+        const API_BASE = '';
+
+        // File upload handling
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+
+        uploadArea.addEventListener('click', () => fileInput.click());
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) handleFileUpload(files[0]);
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) handleFileUpload(e.target.files[0]);
+        });
+
+        async function handleFileUpload(file) {
+            if (!file.name.toLowerCase().endsWith('.csv')) {
+                alert('Prašome įkelti CSV failą');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            document.getElementById('uploadLoading').style.display = 'block';
+            
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+                
+                if (response.ok) {
+                    currentFilename = result.filename;
+                    displayDataOverview(result.stats);
+                    document.getElementById('dataOverview').style.display = 'block';
+                } else {
+                    alert('Klaida: ' + result.error);
+                }
+            } catch (error) {
+                alert('Failo įkėlimas nepavyko: ' + error.message);
+            } finally {
+                document.getElementById('uploadLoading').style.display = 'none';
+            }
+        }
+
+        function displayDataOverview(stats) {
+            const statsCards = document.getElementById('statsCards');
+            
+            const missingCount = Object.values(stats.missing_values).reduce((a, b) => a + b, 0);
+            const totalCells = stats.rows * stats.columns;
+            const missingPercentage = ((missingCount / totalCells) * 100).toFixed(2);
+            
+            statsCards.innerHTML = `
+                <div class="col-md-3">
+                    <div class="card stats-card">
+                        <div class="card-body text-center">
+                            <h3 class="text-primary">${stats.rows.toLocaleString()}</h3>
+                            <p class="mb-0">Eilutės</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card stats-card">
+                        <div class="card-body text-center">
+                            <h3 class="text-info">${stats.columns}</h3>
+                            <p class="mb-0">Stulpeliai</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card stats-card">
+                        <div class="card-body text-center">
+                            <h3 class="text-warning">${missingCount.toLocaleString()}</h3>
+                            <p class="mb-0">Trūkstamos reikšmės</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card stats-card">
+                        <div class="card-body text-center">
+                            <h3 class="text-danger">${missingPercentage}%</h3>
+                            <p class="mb-0">Trūkstamų reikšmių procentas</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        async function analyzeData() {
+            if (!currentFilename) return;
+
+            try {
+                const response = await fetch(`/analyze/${currentFilename}`);
+                const result = await response.json();
+
+                if (response.ok) {
+                    displayAnalysisResults(result);
+                    document.getElementById('analysisResults').style.display = 'block';
+                } else {
+                    alert('Analizė nepavyko: ' + result.error);
+                }
+            } catch (error) {
+                alert('Analizė nepavyko: ' + error.message);
+            }
+        }
+
+        function displayAnalysisResults(result) {
+            const plotsDiv = document.getElementById('analysisPlots');
+            let plotsHtml = '';
+
+            Object.entries(result.plots).forEach(([plotName, plotData]) => {
+                plotsHtml += `
+                    <div class="plot-container">
+                        <h6>${plotName.replace('_', ' ').toUpperCase()}</h6>
+                        <img src="data:image/png;base64,${plotData}" alt="${plotName}">
+                    </div>
+                `;
+            });
+
+            plotsDiv.innerHTML = plotsHtml;
+
+            // Display missing values by column table
+            if (result.missing_by_column && result.missing_by_column.length > 0) {
+                const tableDiv = document.getElementById('missingByColumnTable');
+                let tableHtml = `
+                    <div class="row mt-4">
+                        <div class="col-12">
+                            <h6>Trūkstamų reikšmių procentas pagal stulpelį</h6>
+                            <div class="table-responsive">
+                                <table class="table table-striped table-hover">
+                                    <thead class="table-dark">
+                                        <tr>
+                                            <th>Stulpelis</th>
+                                            <th>Duomenų tipas</th>
+                                            <th>Trūkstamų reikšmių</th>
+                                            <th>Procentas</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                `;
+                
+                result.missing_by_column.forEach(item => {
+                    const progressWidth = Math.min(item.missing_percentage, 100);
+                    const badgeClass = item.missing_percentage >= 50 ? 'bg-danger' : 
+                                     item.missing_percentage >= 25 ? 'bg-warning' : 'bg-info';
+                    
+                    tableHtml += `
+                        <tr>
+                            <td><strong>${item.column}</strong></td>
+                            <td><span class="badge bg-secondary">${item.data_type}</span></td>
+                            <td>${item.missing_count.toLocaleString()}</td>
+                            <td>
+                                <div class="progress" style="height: 20px;">
+                                    <div class="progress-bar ${badgeClass.replace('bg-', 'bg-')}" 
+                                         role="progressbar" 
+                                         style="width: ${progressWidth}%" 
+                                         aria-valuenow="${item.missing_percentage}" 
+                                         aria-valuemin="0" 
+                                         aria-valuemax="100">
+                                        ${item.missing_percentage}%
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                });
+                
+                tableHtml += `
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                tableDiv.innerHTML = tableHtml;
+            }
+
+            const statsDiv = document.getElementById('summaryStats');
+            const missing = result.missing_summary;
+            statsDiv.innerHTML = `
+                <div class="row">
+                    <div class="col-12">
+                        <h6>Trūkstamų reikšmių santrauka</h6>
+                        <ul class="list-group">
+                            <li class="list-group-item d-flex justify-content-between">
+                                <span>Iš viso trūkstamų reikšmių:</span>
+                                <span class="badge bg-warning">${missing.total_missing.toLocaleString()}</span>
+                            </li>
+                            <li class="list-group-item d-flex justify-content-between">
+                                <span>Stulpelių su trūkstamomis reikšmėmis:</span>
+                                <span class="badge bg-info">${missing.columns_with_missing}</span>
+                            </li>
+                            <li class="list-group-item d-flex justify-content-between">
+                                <span>Pilnos eilutės:</span>
+                                <span class="badge bg-success">${missing.complete_rows.toLocaleString()}</span>
+                            </li>
+                            <li class="list-group-item d-flex justify-content-between">
+                                <span>Bendras trūkstamų reikšmių procentas:</span>
+                                <span class="badge bg-danger">${missing.missing_percentage}%</span>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            `;
+        }
+
+        function showImputeModal() {
+            new bootstrap.Modal(document.getElementById('imputeModal')).show();
+        }
+
+        let imputationStartTime;
+
+        function updateProgress(percentage, step, timeElapsed = null) {
+            const progressBar = document.getElementById('progressBar');
+            const progressText = document.getElementById('progressText');
+            const stepDescription = document.getElementById('stepDescription');
+            const estimatedTime = document.getElementById('estimatedTime');
+            
+            progressBar.style.width = percentage + '%';
+            progressText.textContent = Math.round(percentage) + '%';
+            stepDescription.textContent = step;
+            
+            if (timeElapsed && percentage > 10) {
+                const totalEstimated = (timeElapsed / percentage) * 100;
+                const remaining = totalEstimated - timeElapsed;
+                estimatedTime.textContent = Math.round(remaining / 1000) + 's';
+            }
+        }
+
+        function simulateProgress(duration) {
+            let progress = 0;
+            const currentModelType = document.getElementById('modelType') ? 
+                document.getElementById('modelType').value : 'random_forest';
+            const modelDisplayName = currentModelType === 'xgboost' ? 'XGBoost' : 'Random Forest';
+            
+            const steps = [
+                { progress: 10, text: "Analizuojami duomenų tipai..." },
+                { progress: 25, text: "Koduojami kategoriniai duomenys..." },
+                { progress: 40, text: "Ruošiami treniruotės duomenys..." },
+                { progress: 60, text: `Mokomi ${modelDisplayName} modeliai...` },
+                { progress: 80, text: "Prognozuojamos trūkstamos reikšmės..." },
+                { progress: 95, text: "Generuojami grafikai ir ataskaitos..." }
+            ];
+            
+            let stepIndex = 0;
+            const interval = duration / 100;
+            
+            const timer = setInterval(() => {
+                progress += 1;
+                
+                if (stepIndex < steps.length && progress >= steps[stepIndex].progress) {
+                    const timeElapsed = Date.now() - imputationStartTime;
+                    updateProgress(progress, steps[stepIndex].text, timeElapsed);
+                    stepIndex++;
+                } else {
+                    const timeElapsed = Date.now() - imputationStartTime;
+                    updateProgress(progress, stepIndex > 0 ? steps[stepIndex - 1].text : "Apdorojami duomenys...", timeElapsed);
+                }
+                
+                if (progress >= 95) {
+                    clearInterval(timer);
+                }
+            }, interval);
+            
+            return timer;
+        }
+
+        async function performImputation() {
+            if (!currentFilename) return;
+
+            const modelType = document.getElementById('modelType').value;
+            const nEstimators = document.getElementById('nEstimators').value;
+            const randomState = document.getElementById('randomState').value;
+
+            bootstrap.Modal.getInstance(document.getElementById('imputeModal')).hide();
+
+            document.getElementById('imputationProgress').style.display = 'block';
+            document.getElementById('imputationResults').style.display = 'none';
+            
+            imputationStartTime = Date.now();
+            const startTimeStr = new Date(imputationStartTime).toLocaleTimeString('lt-LT');
+            document.getElementById('startTime').textContent = startTimeStr;
+            
+            const modelName = modelType === 'xgboost' ? 'XGBoost' : 'Random Forest';
+            document.getElementById('progressTitle').textContent = `Inicijuojamas ${modelName} užpildymo procesas...`;
+            
+            const estimatedDuration = parseInt(nEstimators) * (modelType === 'xgboost' ? 60 : 50);
+            const progressTimer = simulateProgress(estimatedDuration);
+
+            try {
+                const response = await fetch(`/impute/${currentFilename}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        model_type: modelType,
+                        n_estimators: parseInt(nEstimators),
+                        random_state: parseInt(randomState)
+                    })
+                });
+
+                const result = await response.json();
+
+                clearInterval(progressTimer);
+                
+                if (response.ok) {
+                    updateProgress(100, "Užpildymas baigtas!");
+                    
+                    const endTime = Date.now();
+                    const duration = endTime - imputationStartTime;
+                    const durationStr = Math.round(duration / 1000) + 's';
+                    const endTimeStr = new Date(endTime).toLocaleTimeString('lt-LT');
+                    
+                    setTimeout(() => {
+                        updateProgress(100, "Užpildymas baigtas! Peržiūrėkite rezultatus žemiau.");
+                        document.getElementById('progressBar').classList.remove('progress-bar-animated');
+                        
+                        const progressCard = document.querySelector('#imputationProgress .card-body');
+                        
+                        const existingBtn = progressCard.querySelector('.view-results-button');
+                        if (existingBtn) {
+                            existingBtn.remove();
+                        }
+                        
+                        const viewResultsBtn = document.createElement('div');
+                        viewResultsBtn.className = 'text-center mt-3 view-results-button';
+                        
+                        const usedModelType = result.model_type || 'Random Forest';
+                        const modelDisplayName = usedModelType === 'xgboost' ? 'XGBoost' : 'Random Forest';
+                        
+                        viewResultsBtn.innerHTML = `
+                            <div class="alert alert-info mb-3">
+                                <small><i class="fas fa-info-circle"></i> Naudotas modelis: <strong>${modelDisplayName}</strong></small>
+                            </div>
+                            <button class="btn btn-primary btn-lg" onclick="showResults()">
+                                <i class="fas fa-chart-bar"></i> Peržiūrėti ${modelDisplayName} rezultatus
+                            </button>
+                        `;
+                        progressCard.appendChild(viewResultsBtn);
+                        
+                        window.imputationResultData = {
+                            result: result,
+                            startTime: startTimeStr,
+                            endTime: endTimeStr,
+                            duration: durationStr,
+                            modelType: modelType
+                        };
+                    }, 1000);
+                } else {
+                    document.getElementById('imputationProgress').style.display = 'none';
+                    alert('Užpildymas nepavyko: ' + result.error);
+                }
+            } catch (error) {
+                clearInterval(progressTimer);
+                document.getElementById('imputationProgress').style.display = 'none';
+                alert('Užpildymas nepavyko: ' + error.message);
+            }
+        }
+
+        function displayImputationResults(result) {
+            const plotsDiv = document.getElementById('imputationPlots');
+            let plotsHtml = '';
+
+            plotsHtml += `
+                <div class="row mb-4">
+                    <div class="col-12 text-center">
+                        <button class="btn btn-primary me-2" id="showFeatureImportanceBtn" onclick="showFeatureImportance()">
+                            <i class="fas fa-chart-bar"></i> Požymių svarba
+                        </button>
+                        <button class="btn btn-outline-primary" id="showAccuracyMetricsBtn" onclick="showAccuracyMetrics()">
+                            <i class="fas fa-calculator"></i> Tikslumo metrikos
+                        </button>
+                    </div>
+                </div>
+                
+                <div id="featureImportanceSection" style="display: block;">
+                </div>
+                
+                <div id="accuracyMetricsSection" style="display: none;">
+                </div>
+            `;
+
+            plotsDiv.innerHTML = plotsHtml;
+
+            window.currentImputationResult = result;
+            
+            showFeatureImportance();
+
+            const downloadBtn = document.getElementById('downloadBtn');
+            downloadBtn.style.display = 'block';
+            downloadBtn.onclick = () => downloadFile(result.imputed_filename);
+        }
+
+        function showResults() {
+            document.getElementById('dataOverview').style.display = 'none';
+            document.getElementById('analysisResults').style.display = 'none';
+            document.getElementById('imputationProgress').style.display = 'none';
+            
+            if (window.imputationResultData) {
+                const data = window.imputationResultData;
+                const modelDisplayName = data.modelType === 'xgboost' ? 'XGBoost' : 'Random Forest';
+                
+                document.getElementById('finalModelType').textContent = modelDisplayName;
+                document.getElementById('finalStartTime').textContent = data.startTime;
+                document.getElementById('finalEndTime').textContent = data.endTime;
+                document.getElementById('totalDuration').textContent = data.duration;
+                displayImputationResults(data.result);
+                document.getElementById('imputationResults').style.display = 'block';
+                
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+                
+                addNavigationButtons();
+            }
+        }
+        
+        function addNavigationButtons() {
+            const resultsCard = document.querySelector('#imputationResults .card-body');
+            
+            if (document.getElementById('resultNavigation')) {
+                return;
+            }
+            
+            const navigation = document.createElement('div');
+            navigation.id = 'resultNavigation';
+            navigation.className = 'mb-4 p-3 bg-light rounded';
+            navigation.innerHTML = `
+                <div class="row">
+                    <div class="col-md-6">
+                        <button class="btn btn-outline-secondary" onclick="goBackToAnalysis()">
+                            <i class="fas fa-arrow-left"></i> Atgal į analizę
+                        </button>
+                    </div>
+                    <div class="col-md-6 text-end">
+                        <button class="btn btn-outline-primary" onclick="startNewImputation()">
+                            <i class="fas fa-redo"></i> Naujas užpildymas
+                        </button>
+                    </div>
+                </div>
+            `;
+            resultsCard.insertBefore(navigation, resultsCard.firstChild);
+        }
+        
+        function goBackToAnalysis() {
+            document.getElementById('imputationResults').style.display = 'none';
+            document.getElementById('dataOverview').style.display = 'block';
+            document.getElementById('analysisResults').style.display = 'block';
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+        
+        function startNewImputation() {
+            const progressCard = document.querySelector('#imputationProgress .card-body');
+            const viewResultsBtn = progressCard.querySelector('.text-center');
+            if (viewResultsBtn) {
+                viewResultsBtn.remove();
+            }
+            
+            document.getElementById('progressBar').classList.add('progress-bar-animated');
+            updateProgress(0, "Ruošiami duomenys...");
+            
+            document.getElementById('imputationResults').style.display = 'none';
+            document.getElementById('dataOverview').style.display = 'block';
+            document.getElementById('analysisResults').style.display = 'block';
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            
+            setTimeout(() => {
+                showImputeModal();
+            }, 500);
+        }
+
+        function showFeatureImportance() {
+            document.getElementById('showFeatureImportanceBtn').className = 'btn btn-primary me-2';
+            document.getElementById('showAccuracyMetricsBtn').className = 'btn btn-outline-primary';
+            
+            document.getElementById('featureImportanceSection').style.display = 'block';
+            document.getElementById('accuracyMetricsSection').style.display = 'none';
+            
+            if (window.currentImputationResult) {
+                const result = window.currentImputationResult;
+                const featureSection = document.getElementById('featureImportanceSection');
+                let featureHtml = '';
+                
+                if (result.plots && result.plots['feature_importance']) {
+                    featureHtml += `
+                        <div class="plot-container mb-4">
+                            <div class="card">
+                                <div class="card-header bg-success text-white">
+                                    <h6 class="mb-0">Požymių svarba (Feature Importance)</h6>
+                                </div>
+                                <div class="card-body">
+                                    <p class="text-muted small mb-3">Grafikai rodo, kurie duomenų stulpeliai labiausiai prisidėjo prie trūkstamų reikšmių prognozavimo</p>
+                                    <img src="data:image/png;base64,${result.plots['feature_importance']}" alt="feature_importance" class="img-fluid">
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                if (result.feature_importance) {
+                    featureHtml += '<div class="mt-4"><h6>Požymių svarba pagal užpildytą stulpelį</h6>';
+                    
+                    Object.entries(result.feature_importance).forEach(([column, importance]) => {
+                        featureHtml += `
+                            <div class="mb-3">
+                                <h6 class="text-muted">Užpildytas stulpelis: ${column}</h6>
+                                <div class="feature-list">
+                        `;
+                        
+                        const sortedFeatures = Object.entries(importance)
+                            .sort(([,a], [,b]) => b - a)
+                            .slice(0, 10);
+                        
+                        sortedFeatures.forEach(([feature, score]) => {
+                            const percentage = (score * 100).toFixed(2);
+                            featureHtml += `
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <span class="small">${feature}</span>
+                                    <span class="badge bg-secondary">${percentage}%</span>
+                                </div>
+                            `;
+                        });
+                        
+                        featureHtml += '</div></div>';
+                    });
+                    
+                    featureHtml += '</div>';
+                }
+                
+                featureSection.innerHTML = featureHtml;
+            }
+        }
+        
+        function showAccuracyMetrics() {
+            document.getElementById('showFeatureImportanceBtn').className = 'btn btn-outline-primary me-2';
+            document.getElementById('showAccuracyMetricsBtn').className = 'btn btn-primary';
+            
+            document.getElementById('featureImportanceSection').style.display = 'none';
+            document.getElementById('accuracyMetricsSection').style.display = 'block';
+            
+            if (window.currentImputationResult) {
+                const result = window.currentImputationResult;
+                const metricsSection = document.getElementById('accuracyMetricsSection');
+                
+                let metricsHtml = '<div class="mt-4"><h5><i class="fas fa-chart-line"></i> Modelių efektyvumo vertinimas</h5>';
+                
+                if (result.plots && result.plots['performance_table']) {
+                    metricsHtml += `
+                        <div class="plot-container mb-4">
+                            <div class="card">
+                                <div class="card-header bg-primary text-white">
+                                    <h6 class="mb-0">Modelių efektyvumo santrauka</h6>
+                                </div>
+                                <div class="card-body">
+                                    <p class="text-muted small mb-3">Išsami lentelė su visomis svarbiomis metrikomis kiekvienam užpildytam stulpeliui</p>
+                                    <img src="data:image/png;base64,${result.plots['performance_table']}" alt="performance_table" class="img-fluid">
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                const metricCharts = ['rmse_comparison', 'r2_comparison', 'mape_comparison', 'radar_comparison'];
+                
+                metricCharts.forEach(chartName => {
+                    if (result.plots && result.plots[chartName]) {
+                        let title = '';
+                        let description = '';
+                        let cardColor = 'bg-info';
+                        
+                        switch(chartName) {
+                            case 'rmse_comparison':
+                                title = 'RMSE (Root Mean Square Error) palyginimas';
+                                description = 'Mažesnė RMSE reikšmė rodo geresnį modelio tikslumą. Matuoja vidutinę kvadratinę paklaidą.';
+                                cardColor = 'bg-danger';
+                                break;
+                            case 'r2_comparison':
+                                title = 'R² (Determinacijos koeficientas) palyginimas';
+                                description = 'R² rodo, kiek proc. dispersijos paaiškina modelis. Reikšmės artimos 1 rodo gerą modelį.';
+                                cardColor = 'bg-success';
+                                break;
+                            case 'mape_comparison':
+                                title = 'MAPE (Mean Absolute Percentage Error) palyginimas';
+                                description = 'Procentinė absoliuti paklaida. MAPE < 10% - labai geras, < 20% - geras modelis.';
+                                cardColor = 'bg-warning';
+                                break;
+                            case 'radar_comparison':
+                                title = 'Kompleksinis modelių palyginimas';
+                                description = 'Daugiamatis modelių efektyvumo palyginimas. Didesnis plotas rodo geresnį modelį.';
+                                cardColor = 'bg-secondary';
+                                break;
+                        }
+                        
+                        metricsHtml += `
+                            <div class="plot-container mb-4">
+                                <div class="card">
+                                    <div class="card-header ${cardColor} text-white">
+                                        <h6 class="mb-0">${title}</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <p class="text-muted small mb-3">${description}</p>
+                                        <img src="data:image/png;base64,${result.plots[chartName]}" alt="${chartName}" class="img-fluid">
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    }
+                });
+                
+                metricsHtml += '</div>';
+                metricsSection.innerHTML = metricsHtml;
+            }
+        }
+
+        function downloadFile(filename) {
+            window.open(`/download/${filename}`, '_blank');
+        }
+    </script>
+</body>
+</html>
