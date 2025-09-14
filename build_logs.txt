@@ -1,0 +1,50 @@
+2025-09-14T14:44:55.129993747Z     ^
+2025-09-14T14:44:55.129995867Z   File "/opt/render/project/src/.venv/lib/python3.13/site-packages/pip/_internal/resolution/resolvelib/candidates.py", line 159, in __init__
+2025-09-14T14:44:55.129997927Z     self.dist = self._prepare()
+2025-09-14T14:44:55.129999948Z                 ~~~~~~~~~~~~~^^
+2025-09-14T14:44:55.130002028Z   File "/opt/render/project/src/.venv/lib/python3.13/site-packages/pip/_internal/resolution/resolvelib/candidates.py", line 236, in _prepare
+2025-09-14T14:44:55.130014568Z     dist = self._prepare_distribution()
+2025-09-14T14:44:55.130017008Z   File "/opt/render/project/src/.venv/lib/python3.13/site-packages/pip/_internal/resolution/resolvelib/candidates.py", line 317, in _prepare_distribution
+2025-09-14T14:44:55.130019168Z     return preparer.prepare_linked_requirement(self._ireq, parallel_builds=True)
+2025-09-14T14:44:55.130021258Z            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2025-09-14T14:44:55.130023378Z   File "/opt/render/project/src/.venv/lib/python3.13/site-packages/pip/_internal/operations/prepare.py", line 532, in prepare_linked_requirement
+2025-09-14T14:44:55.130025548Z     return self._prepare_linked_requirement(req, parallel_builds)
+2025-09-14T14:44:55.130027648Z            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+2025-09-14T14:44:55.130029788Z   File "/opt/render/project/src/.venv/lib/python3.13/site-packages/pip/_internal/operations/prepare.py", line 647, in _prepare_linked_requirement
+2025-09-14T14:44:55.130031848Z     dist = _get_prepared_distribution(
+2025-09-14T14:44:55.130033928Z         req,
+2025-09-14T14:44:55.130036018Z     ...<3 lines>...
+2025-09-14T14:44:55.130038118Z         self.check_build_deps,
+2025-09-14T14:44:55.130040168Z     )
+2025-09-14T14:44:55.130045758Z   File "/opt/render/project/src/.venv/lib/python3.13/site-packages/pip/_internal/operations/prepare.py", line 71, in _get_prepared_distribution
+2025-09-14T14:44:55.130047908Z     abstract_dist.prepare_distribution_metadata(
+2025-09-14T14:44:55.130049968Z     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+2025-09-14T14:44:55.130053208Z         finder, build_isolation, check_build_deps
+2025-09-14T14:44:55.130055728Z         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2025-09-14T14:44:55.130057889Z     )
+2025-09-14T14:44:55.130059979Z     ^
+2025-09-14T14:44:55.130062059Z   File "/opt/render/project/src/.venv/lib/python3.13/site-packages/pip/_internal/distributions/sdist.py", line 56, in prepare_distribution_metadata
+2025-09-14T14:44:55.130064169Z     self._install_build_reqs(finder)
+2025-09-14T14:44:55.130066269Z     ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+2025-09-14T14:44:55.130068329Z   File "/opt/render/project/src/.venv/lib/python3.13/site-packages/pip/_internal/distributions/sdist.py", line 126, in _install_build_reqs
+2025-09-14T14:44:55.130070449Z     build_reqs = self._get_build_requires_wheel()
+2025-09-14T14:44:55.130072559Z   File "/opt/render/project/src/.venv/lib/python3.13/site-packages/pip/_internal/distributions/sdist.py", line 103, in _get_build_requires_wheel
+2025-09-14T14:44:55.130074679Z     return backend.get_requires_for_build_wheel()
+2025-09-14T14:44:55.130076739Z            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+2025-09-14T14:44:55.130078779Z   File "/opt/render/project/src/.venv/lib/python3.13/site-packages/pip/_internal/utils/misc.py", line 702, in get_requires_for_build_wheel
+2025-09-14T14:44:55.130080879Z     return super().get_requires_for_build_wheel(config_settings=cs)
+2025-09-14T14:44:55.130082959Z            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+2025-09-14T14:44:55.130085069Z   File "/opt/render/project/src/.venv/lib/python3.13/site-packages/pip/_vendor/pyproject_hooks/_impl.py", line 196, in get_requires_for_build_wheel
+2025-09-14T14:44:55.130087139Z     return self._call_hook(
+2025-09-14T14:44:55.130089189Z            ~~~~~~~~~~~~~~~^
+2025-09-14T14:44:55.130091289Z         "get_requires_for_build_wheel", {"config_settings": config_settings}
+2025-09-14T14:44:55.13011914Z         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2025-09-14T14:44:55.13012132Z     )
+2025-09-14T14:44:55.13012343Z     ^
+2025-09-14T14:44:55.13012558Z   File "/opt/render/project/src/.venv/lib/python3.13/site-packages/pip/_vendor/pyproject_hooks/_impl.py", line 402, in _call_hook
+2025-09-14T14:44:55.13012768Z     raise BackendUnavailable(
+2025-09-14T14:44:55.13012973Z     ...<4 lines>...
+2025-09-14T14:44:55.13013177Z     )
+2025-09-14T14:44:55.13013453Z pip._vendor.pyproject_hooks._impl.BackendUnavailable: Cannot import 'setuptools.build_meta'
+2025-09-14T14:44:55.795156524Z ==> Build failed 😞
+2025-09-14T14:44:55.795173974Z ==> Common ways to troubleshoot your deploy: https://render.com/docs/troubleshooting-deploys
