@@ -387,15 +387,14 @@
             }
 
             renderComment(comment) {
-                // Parse date and convert to Lithuania timezone (GMT+3)
+                // MySQL now returns Lithuania time (GMT+3) directly
                 const date = new Date(comment.sukurimo_data);
                 const formattedDate = date.toLocaleDateString('lt-LT', {
                     year: 'numeric',
                     month: 'long',
                     day: 'numeric',
                     hour: '2-digit',
-                    minute: '2-digit',
-                    timeZone: 'Europe/Vilnius'
+                    minute: '2-digit'
                 });
 
                 return `
