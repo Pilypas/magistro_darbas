@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_file
+from flask import Flask, request, jsonify, send_file, render_template_string
 from flask_cors import CORS
 import pandas as pd
 import numpy as np
@@ -19,6 +19,9 @@ import plotly.utils
 import json
 import os
 from werkzeug.utils import secure_filename
+import mysql.connector
+from mysql.connector import Error
+from datetime import datetime
 
 app = Flask(__name__)
 CORS(app)
@@ -28,6 +31,58 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 UPLOAD_FOLDER = 'uploads'
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
+
+# MySQL Configuration - only works in production with environment variables
+# No default values for security - requires proper environment setup
+DB_CONFIG = {
+    'host': os.environ.get('MYSQL_HOST'),
+    'user': os.environ.get('MYSQL_USER'),
+    'password': os.environ.get('MYSQL_PASSWORD'),
+    'database': os.environ.get('MYSQL_DATABASE'),
+    'connect_timeout': 10,
+    'ssl_disabled': False,
+    'autocommit': True
+}
+
+# Check if all required MySQL environment variables are set
+MYSQL_ENABLED = all([
+    os.environ.get('MYSQL_HOST'),
+    os.environ.get('MYSQL_USER'),
+    os.environ.get('MYSQL_PASSWORD'),
+    os.environ.get('MYSQL_DATABASE')
+])
+
+print(f"MySQL enabled: {MYSQL_ENABLED}")
+if not MYSQL_ENABLED:
+    print("MySQL environment variables not set - comments feature will be disabled")
+    print("Required: MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE")
+
+# Database connection manager
+class DatabaseManager:
+    def __init__(self, config, enabled=True):
+        self.config = config
+        self.connection = None
+        self.enabled = enabled
+
+    def get_connection(self):
+        if not self.enabled:
+            print("MySQL is disabled - environment variables not configured")
+            return None
+
+        try:
+            if self.connection is None or not self.connection.is_connected():
+                self.connection = mysql.connector.connect(**self.config)
+            return self.connection
+        except Error as e:
+            print(f"Database connection error: {e}")
+            return None
+
+    def close_connection(self):
+        if self.connection and self.connection.is_connected():
+            self.connection.close()
+
+# Initialize database manager - only if MySQL is properly configured
+db_manager = DatabaseManager(DB_CONFIG, enabled=MYSQL_ENABLED)
 
 # MLImputer wrapper klasė, kuri naudoja atskirų modelių failus
 class MLImputer:
@@ -75,6 +130,81 @@ def imputacija():
 @app.route('/apie')
 def apie():
     return send_file('templates/apie.html')
+
+@app.route('/komentarai')
+def komentarai():
+    return send_file('templates/komentarai.html')
+
+@app.route('/api/komentarai', methods=['GET'])
+def get_komentarai():
+    # Check if MySQL is enabled
+    if not MYSQL_ENABLED:
+        return jsonify({
+            "komentarai": [],
+            "message": "Komentarų funkcija neprieinama - duomenų bazė nesukonfigūruota"
+        })
+
+    try:
+        connection = db_manager.get_connection()
+        if not connection:
+            return jsonify({"error": "Nepavyko prisijungti prie duomenų bazės"}), 500
+
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT id, vardas, el_pastas, komentaras, sukurimo_data
+            FROM komentarai
+            ORDER BY sukurimo_data DESC
+        """)
+        komentarai = cursor.fetchall()
+        cursor.close()
+
+        return jsonify({"komentarai": komentarai})
+    except Error as e:
+        return jsonify({"error": f"Duomenų bazės klaida: {str(e)}"}), 500
+
+@app.route('/api/komentarai', methods=['POST'])
+def add_komentaras():
+    # Check if MySQL is enabled
+    if not MYSQL_ENABLED:
+        return jsonify({
+            "error": "Komentarų funkcija neprieinama - duomenų bazė nesukonfigūruota. Susisiekite su administratoriumi."
+        }), 503
+
+    try:
+        data = request.get_json()
+        vardas = data.get('vardas', '').strip()
+        el_pastas = data.get('el_pastas', '').strip()
+        komentaras = data.get('komentaras', '').strip()
+
+        if not vardas or not komentaras:
+            return jsonify({"error": "Vardas ir komentaras yra privalomi"}), 400
+
+        connection = db_manager.get_connection()
+        if not connection:
+            return jsonify({"error": "Nepavyko prisijungti prie duomenų bazės"}), 500
+
+        cursor = connection.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS komentarai (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                vardas VARCHAR(100) NOT NULL,
+                el_pastas VARCHAR(255),
+                komentaras TEXT NOT NULL,
+                sukurimo_data DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        cursor.execute("""
+            INSERT INTO komentarai (vardas, el_pastas, komentaras)
+            VALUES (%s, %s, %s)
+        """, (vardas, el_pastas if el_pastas else None, komentaras))
+
+        connection.commit()
+        cursor.close()
+
+        return jsonify({"message": "Komentaras sėkmingai pridėtas"})
+    except Error as e:
+        return jsonify({"error": f"Duomenų bazės klaida: {str(e)}"}), 500
 
 @app.route('/upload', methods=['POST'])
 def upload_file():

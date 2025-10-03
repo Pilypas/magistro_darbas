@@ -92,6 +92,12 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a class="nav-link" href="/komentarai">
+                            <i class="fas fa-comments me-1"></i>
+                            Komentarai
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a class="nav-link" href="/apie">
                             <i class="fas fa-info-circle me-1"></i>
                             Apie
@@ -106,8 +112,6 @@
         <div class="row">
             <div class="col-12">
                 <h1 class="text-center mb-4">
-                    <i class="fas fa-tree text-success me-2"></i> 
-                    <i class="fas fa-bolt text-warning me-2"></i>
                     Trūkstamų reikšmių užpildymas
                 </h1>
                 <p class="text-center text-muted mb-4">
@@ -277,40 +281,25 @@
                 </div>
                 <div class="modal-body">
                     <div class="row">
-                        <div class="col-md-12 mb-4">
-                            <div class="alert alert-info">
-                                <i class="fas fa-info-circle me-2"></i>
-                                <strong>Algoritmų palyginimas:</strong> Random Forest paprastai geresnis mažiems duomenims, 
-                                XGBoost - didesniems ir sudėtingesniems duomenims.
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="row">
                         <div class="col-md-6">
                             <div class="mb-3">
                                 <label class="form-label">
-                                    <i class="fas fa-robot me-1"></i>
-                                    Modelio tipas
+                                    Modelis
                                 </label>
                                 <select class="form-select" id="modelType">
                                     <option value="random_forest" selected>
-                                        <i class="fas fa-tree"></i> Random Forest (Rekomenduojama)
+                                        <i class="fas fa-tree"></i> Random Forest
                                     </option>
                                     <option value="xgboost">
-                                        <i class="fas fa-bolt"></i> XGBoost (Pažangus)
+                                        <i class="fas fa-bolt"></i> XGBoost
                                     </option>
                                 </select>
-                                <div class="form-text">
-                                    Pasirinkite mašininio mokymosi algoritmą trūkstamų reikšmių užpildymui
-                                </div>
                             </div>
                         </div>
                         
                         <div class="col-md-6">
                             <div class="mb-3">
                                 <label class="form-label">
-                                    <i class="fas fa-seedling me-1"></i>
                                     Medžių skaičius (n_estimators)
                                 </label>
                                 <input type="number" class="form-control" id="nEstimators" value="100" min="10" max="1000">
@@ -325,7 +314,6 @@
                         <div class="col-md-6">
                             <div class="mb-3">
                                 <label class="form-label">
-                                    <i class="fas fa-dice me-1"></i>
                                     Atsitiktinumo būsena
                                 </label>
                                 <input type="number" class="form-control" id="randomState" value="42">
@@ -338,7 +326,6 @@
                         <div class="col-md-6">
                             <div class="mb-3">
                                 <label class="form-label">
-                                    <i class="fas fa-layer-group me-1"></i>
                                     Maksimalus gylis
                                 </label>
                                 <select class="form-select" id="maxDepth">
@@ -388,21 +375,15 @@
                 <div class="col-md-6">
                     <h5><i class="fas fa-chart-line me-2"></i>Duomenų analizės sistema</h5>
                     <p class="text-muted">
-                        Pažangus trūkstamų reikšmių užpildymas naudojant mašininio mokymosi algoritmus.
+                        Įrankis, leidžiantis automatizuoti duomenų analizę ir atrasti prognozavimo galimybes.
                     </p>
                 </div>
                 <div class="col-md-3">
-                    <h6>Funkcijos</h6>
+                     <h6>Sistemos funkcijos</h6>
                     <ul class="list-unstyled">
                         <li><a href="/imputacija" class="text-light text-decoration-none">
-                            <i class="fas fa-magic me-1"></i>Random Forest
+                            <i class="fas fa-magic me-1"></i>Imputacija
                         </a></li>
-                        <li><a href="/imputacija" class="text-light text-decoration-none">
-                            <i class="fas fa-bolt me-1"></i>XGBoost
-                        </a></li>
-                        <li class="text-muted">
-                            <i class="fas fa-chart-bar me-1"></i>Analizė
-                        </li>
                     </ul>
                 </div>
                 <div class="col-md-3">
@@ -423,13 +404,13 @@
             <hr class="my-4">
             <div class="row align-items-center">
                 <div class="col-md-6">
-                    <p class="mb-0 text-muted">
-                        &copy; 2024 Duomenų analizės sistema. Visi teisės rezervuotos.
+                    <p class="mb-0 text-muted" style="color:white !important;">
+                        &copy; 2025 Duomenų analizės sistema. Visos teisės saugomos.
                     </p>
                 </div>
                 <div class="col-md-6 text-end">
-                    <small class="text-muted">
-                        Sukurta su <i class="fas fa-heart text-danger"></i> ir mašininiu mokymuisi
+                    <small class="text-muted" style="color:white !important;">
+                        Darbo autorius: Irmantas Pilypas
                     </small>
                 </div>
             </div>

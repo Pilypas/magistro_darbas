@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="lt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Komentarai - Duomenų analizės sistema</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .navbar-brand {
+            font-weight: bold;
+        }
+        .navbar-nav .nav-link {
+            font-weight: 500;
+            transition: color 0.3s ease;
+        }
+        .navbar-nav .nav-link:hover {
+            color: #0d6efd !important;
+        }
+        .navbar {
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        body {
+            padding-top: 80px;
+            background-color: #f8f9fa;
+        }
+
+        .comment-card {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease;
+        }
+
+        .comment-card:hover {
+            transform: translateY(-2px);
+        }
+
+        .comment-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .comment-author {
+            font-weight: bold;
+            color: #495057;
+        }
+
+        .comment-date {
+            color: #6c757d;
+            font-size: 0.9rem;
+        }
+
+        .comment-content {
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .form-container {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .form-title {
+            color: #495057;
+            margin-bottom: 25px;
+        }
+
+        .btn-submit {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            border-radius: 10px;
+            color: white;
+            padding: 12px 30px;
+            font-weight: 500;
+            transition: transform 0.3s ease;
+        }
+
+        .btn-submit:hover {
+            transform: translateY(-2px);
+            color: white;
+        }
+
+        .loading-spinner {
+            display: none;
+        }
+
+        .alert {
+            border-radius: 10px;
+        }
+
+        .page-header {
+            text-align: center;
+            margin-bottom: 40px;
+            color: #495057;
+        }
+
+        .comment-email {
+            color: #6c757d;
+            font-size: 0.9rem;
+            font-style: italic;
+        }
+
+        .no-comments {
+            text-align: center;
+            padding: 50px 20px;
+            background: white;
+            border-radius: 15px;
+            color: #6c757d;
+        }
+
+        .comment-icon {
+            color: #667eea;
+            margin-right: 10px;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-light bg-white fixed-top">
+        <div class="container">
+            <a class="navbar-brand" href="/">
+                <i class="fas fa-chart-line text-primary me-2"></i>
+                Duomenų analizės sistema
+            </a>
+
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">
+                            <i class="fas fa-home me-1"></i>
+                            Pradžia
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/imputacija">
+                            <i class="fas fa-magic me-1"></i>
+                            Imputacija
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/komentarai">
+                            <i class="fas fa-comments me-1"></i>
+                            Komentarai
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/apie">
+                            <i class="fas fa-info-circle me-1"></i>
+                            Apie
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="page-header">
+            <h1><i class="fas fa-comments comment-icon"></i>Komentarai</h1>
+            <p class="lead">Palikite savo atsiliepimą apie duomenų analizės sistemą</p>
+        </div>
+
+        <!-- Komentaro pridėjimo forma -->
+        <div class="form-container">
+            <h3 class="form-title"><i class="fas fa-pen me-2"></i>Pridėti komentarą</h3>
+            <form id="commentForm">
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="vardas" class="form-label">Vardas *</label>
+                        <input type="text" class="form-control" id="vardas" name="vardas" required>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label for="el_pastas" class="form-label">El. paštas</label>
+                        <input type="email" class="form-control" id="el_pastas" name="el_pastas">
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label for="komentaras" class="form-label">Komentaras *</label>
+                    <textarea class="form-control" id="komentaras" name="komentaras" rows="4" required placeholder="Parašykite savo atsiliepimą apie sistemą..."></textarea>
+                </div>
+                <button type="submit" class="btn btn-submit">
+                    <span class="submit-text">
+                        <i class="fas fa-paper-plane me-2"></i>Pateikti komentarą
+                    </span>
+                    <span class="loading-spinner">
+                        <i class="fas fa-spinner fa-spin me-2"></i>Siunčiama...
+                    </span>
+                </button>
+            </form>
+        </div>
+
+        <!-- Pranešimų zona -->
+        <div id="alertContainer"></div>
+
+        <!-- Komentarų sąrašas -->
+        <div id="commentsContainer">
+            <div class="text-center">
+                <i class="fas fa-spinner fa-spin fa-2x text-primary"></i>
+                <p class="mt-2">Kraunami komentarai...</p>
+            </div>
+        </div>
+    </div>
+
+    <footer class="bg-dark text-light py-4 mt-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-md-6">
+                    <h5><i class="fas fa-chart-line me-2"></i>Duomenų analizės sistema</h5>
+                    <p class="text-muted">
+                        Įrankis, leidžiantis automatizuoti duomenų analizę ir atrasti prognozavimo galimybes.
+                    </p>
+                </div>
+                <div class="col-md-3">
+                    <h6>Sistemos funkcijos</h6>
+                    <ul class="list-unstyled">
+                        <li><a href="/imputacija" class="text-light text-decoration-none">
+                            <i class="fas fa-magic me-1"></i>Imputacija
+                        </a></li>
+                        <li><a href="/komentarai" class="text-light text-decoration-none">
+                            <i class="fas fa-comments me-1"></i>Komentarai
+                        </a></li>
+                    </ul>
+                </div>
+                <div class="col-md-3">
+                    <h6>Nuorodos</h6>
+                    <ul class="list-unstyled">
+                        <li><a href="/" class="text-light text-decoration-none">
+                            <i class="fas fa-home me-1"></i>Pradžia
+                        </a></li>
+                        <li><a href="/apie" class="text-light text-decoration-none">
+                            <i class="fas fa-info-circle me-1"></i>Apie projektą
+                        </a></li>
+                        <li><a href="https://github.com" class="text-light text-decoration-none" target="_blank">
+                            <i class="fab fa-github me-1"></i>GitHub
+                        </a></li>
+                    </ul>
+                </div>
+            </div>
+            <hr class="my-4">
+            <div class="row align-items-center">
+                <div class="col-md-6">
+                    <p class="mb-0 text-muted" style="color:white !important;">
+                        &copy; 2025 Duomenų analizės sistema. Visos teisės saugomos.
+                    </p>
+                </div>
+                <div class="col-md-6 text-end">
+                    <small class="text-muted" style="color:white !important;">
+                        Darbo autorius: Irmantas Pilypas
+                    </small>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Komentarų valdymas
+        class CommentsManager {
+            constructor() {
+                this.commentsContainer = document.getElementById('commentsContainer');
+                this.alertContainer = document.getElementById('alertContainer');
+                this.commentForm = document.getElementById('commentForm');
+
+                this.bindEvents();
+                this.loadComments();
+            }
+
+            bindEvents() {
+                this.commentForm.addEventListener('submit', (e) => this.handleSubmit(e));
+            }
+
+            showAlert(message, type = 'success') {
+                const alertDiv = document.createElement('div');
+                alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+                alertDiv.innerHTML = `
+                    ${message}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                `;
+
+                this.alertContainer.innerHTML = '';
+                this.alertContainer.appendChild(alertDiv);
+
+                // Auto-dismiss after 5 seconds
+                setTimeout(() => {
+                    if (alertDiv) {
+                        alertDiv.remove();
+                    }
+                }, 5000);
+            }
+
+            setLoadingState(isLoading) {
+                const submitBtn = this.commentForm.querySelector('button[type="submit"]');
+                const submitText = submitBtn.querySelector('.submit-text');
+                const loadingSpinner = submitBtn.querySelector('.loading-spinner');
+
+                submitBtn.disabled = isLoading;
+                submitText.style.display = isLoading ? 'none' : 'inline';
+                loadingSpinner.style.display = isLoading ? 'inline' : 'none';
+            }
+
+            async handleSubmit(e) {
+                e.preventDefault();
+
+                const formData = new FormData(this.commentForm);
+                const data = {
+                    vardas: formData.get('vardas'),
+                    el_pastas: formData.get('el_pastas'),
+                    komentaras: formData.get('komentaras')
+                };
+
+                if (!data.vardas.trim() || !data.komentaras.trim()) {
+                    this.showAlert('Prašome užpildyti visus privalomus laukus!', 'warning');
+                    return;
+                }
+
+                this.setLoadingState(true);
+
+                try {
+                    const response = await fetch('/api/komentarai', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(data)
+                    });
+
+                    const result = await response.json();
+
+                    if (response.ok) {
+                        this.showAlert('Komentaras sėkmingai pridėtas!', 'success');
+                        this.commentForm.reset();
+                        this.loadComments(); // Perkrauname komentarus
+                    } else {
+                        this.showAlert(result.error || 'Įvyko klaida pridedant komentarą', 'danger');
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    this.showAlert('Įvyko klaida siunčiant komentarą', 'danger');
+                } finally {
+                    this.setLoadingState(false);
+                }
+            }
+
+            async loadComments() {
+                try {
+                    const response = await fetch('/api/komentarai');
+                    const data = await response.json();
+
+                    if (response.ok) {
+                        this.renderComments(data.komentarai);
+                    } else {
+                        this.showAlert(data.error || 'Nepavyko įkelti komentarų', 'danger');
+                        this.renderEmptyState();
+                    }
+                } catch (error) {
+                    console.error('Error loading comments:', error);
+                    this.showAlert('Įvyko klaida kraunant komentarus', 'danger');
+                    this.renderEmptyState();
+                }
+            }
+
+            renderComments(comments) {
+                if (!comments || comments.length === 0) {
+                    this.renderEmptyState();
+                    return;
+                }
+
+                const commentsHtml = comments.map(comment => this.renderComment(comment)).join('');
+
+                this.commentsContainer.innerHTML = `
+                    <h3 class="mb-4"><i class="fas fa-comment-dots me-2"></i>Visi komentarai (${comments.length})</h3>
+                    ${commentsHtml}
+                `;
+            }
+
+            renderComment(comment) {
+                const date = new Date(comment.sukurimo_data);
+                const formattedDate = date.toLocaleDateString('lt-LT', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+
+                return `
+                    <div class="comment-card">
+                        <div class="comment-header">
+                            <div>
+                                <div class="comment-author">
+                                    <i class="fas fa-user me-2"></i>${this.escapeHtml(comment.vardas)}
+                                </div>
+                                ${comment.el_pastas ? `<div class="comment-email">
+                                    <i class="fas fa-envelope me-2"></i>${this.escapeHtml(comment.el_pastas)}
+                                </div>` : ''}
+                            </div>
+                            <div class="comment-date">
+                                <i class="fas fa-calendar me-1"></i>${formattedDate}
+                            </div>
+                        </div>
+                        <div class="comment-content">
+                            ${this.escapeHtml(comment.komentaras).replace(/\n/g, '<br>')}
+                        </div>
+                    </div>
+                `;
+            }
+
+            renderEmptyState() {
+                this.commentsContainer.innerHTML = `
+                    <div class="no-comments">
+                        <i class="fas fa-comment-slash fa-3x mb-3"></i>
+                        <h4>Kol kas nėra komentarų</h4>
+                        <p>Būkite pirmas, palikęs komentarą apie sistemą!</p>
+                    </div>
+                `;
+            }
+
+            escapeHtml(text) {
+                const map = {
+                    '&': '&amp;',
+                    '<': '&lt;',
+                    '>': '&gt;',
+                    '"': '&quot;',
+                    "'": '&#039;'
+                };
+                return text.replace(/[&<>"']/g, function(m) { return map[m]; });
+            }
+        }
+
+        // Inicializuojame komentarų valdyklę
+        document.addEventListener('DOMContentLoaded', () => {
+            new CommentsManager();
+        });
+    </script>
+</body>
+</html>
