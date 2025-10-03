@@ -13,3 +13,4 @@ setuptools==68.2.2
 wheel==0.41.2
 Werkzeug==2.3.7
 pip==23.2.1
+mysql-connector-python==9.4.0
