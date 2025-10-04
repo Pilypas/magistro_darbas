@@ -531,8 +531,16 @@ def impute_missing_values(filename):
         imputer = MLImputer(model_type=model_type, n_estimators=n_estimators, random_state=random_state)
         df_imputed = imputer.fit_transform(df)
 
-        # Save imputed data
-        imputed_filename = f"imputed_{filename}"
+        # Generate unique filename for imputed data
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        unique_id = str(uuid.uuid4())[:8]  # Short unique ID
+
+        # Remove extension from original filename
+        base_name = os.path.splitext(filename)[0]
+        extension = os.path.splitext(filename)[1]
+
+        # Create unique imputed filename
+        imputed_filename = f"{base_name}_imputed_{model_type}_{timestamp}_{unique_id}{extension}"
         imputed_filepath = os.path.join(UPLOAD_FOLDER, imputed_filename)
         df_imputed.to_csv(imputed_filepath, index=False)
 
