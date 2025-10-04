@@ -41,7 +41,9 @@ DB_CONFIG = {
     'database': os.environ.get('MYSQL_DATABASE'),
     'connect_timeout': 10,
     'ssl_disabled': False,
-    'autocommit': True
+    'autocommit': True,
+    'charset': 'utf8mb4',
+    'collation': 'utf8mb4_unicode_ci'
 }
 
 # Check if all required MySQL environment variables are set
@@ -191,7 +193,14 @@ def add_komentaras():
                 el_pastas VARCHAR(255),
                 komentaras TEXT NOT NULL,
                 sukurimo_data DATETIME DEFAULT CURRENT_TIMESTAMP
-            )
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        """)
+
+        # Fix existing table charset if it exists
+        cursor.execute("""
+            ALTER TABLE komentarai
+            CONVERT TO CHARACTER SET utf8mb4
+            COLLATE utf8mb4_unicode_ci
         """)
 
         cursor.execute("""
