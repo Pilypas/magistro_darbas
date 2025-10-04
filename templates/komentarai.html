@@ -387,41 +387,37 @@
             }
 
             renderComment(comment) {
-                // MySQL returns GMT string: "Sat, 04 Oct 2025 12:45:51 GMT"
-                // Parse it and convert to Lithuania timezone
-                const date = new Date(comment.sukurimo_data);
+    // Tik parodyti taip, kaip ateina iš API/DB
+    const raw = comment.sukurimo_data;
 
-                // Convert to Lithuania timezone (GMT+3)
-                const formattedDate = date.toLocaleDateString('lt-LT', {
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    timeZone: 'Europe/Vilnius'
-                });
+    // Jei API kartais grąžina ISO (pvz. "2025-10-04T13:48:12Z"),
+    // normalizuojam į "YYYY-MM-DD HH:MM:SS" be laiko juostos:
+    const shown = (typeof raw === 'string')
+        ? raw.replace('T', ' ').replace('Z', '').split('.')[0]
+        : '';
 
-                return `
-                    <div class="comment-card">
-                        <div class="comment-header">
-                            <div>
-                                <div class="comment-author">
-                                    <i class="fas fa-user me-2"></i>${this.escapeHtml(comment.vardas)}
-                                </div>
-                                ${comment.el_pastas ? `<div class="comment-email">
-                                    <i class="fas fa-envelope me-2"></i>${this.escapeHtml(comment.el_pastas)}
-                                </div>` : ''}
-                            </div>
-                            <div class="comment-date">
-                                <i class="fas fa-calendar me-1"></i>${formattedDate}
-                            </div>
-                        </div>
-                        <div class="comment-content">
-                            ${this.escapeHtml(comment.komentaras).replace(/\n/g, '<br>')}
-                        </div>
+    return `
+        <div class="comment-card">
+            <div class="comment-header">
+                <div>
+                    <div class="comment-author">
+                        <i class="fas fa-user me-2"></i>${this.escapeHtml(comment.vardas)}
                     </div>
-                `;
-            }
+                    ${comment.el_pastas ? `<div class="comment-email">
+                        <i class="fas fa-envelope me-2"></i>${this.escapeHtml(comment.el_pastas)}
+                    </div>` : ''}
+                </div>
+                <div class="comment-date">
+                    <i class="fas fa-calendar me-1"></i>${shown}
+                </div>
+            </div>
+            <div class="comment-content">
+                ${this.escapeHtml(comment.komentaras).replace(/\n/g, '<br>')}
+            </div>
+        </div>
+    `;
+}
+
 
             renderEmptyState() {
                 this.commentsContainer.innerHTML = `
