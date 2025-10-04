@@ -387,21 +387,53 @@
             }
 
             renderComment(comment) {
-                // Parse MySQL datetime format manually: "2025-10-03 23:29:43"
-                const [datePart, timePart] = comment.sukurimo_data.split(' ');
-                const [year, month, day] = datePart.split('-');
-                const [hour, minute] = timePart.split(':');
+                // Debug: check what we're getting from MySQL
+                console.log('MySQL date:', comment.sukurimo_data, typeof comment.sukurimo_data);
 
-                // Create date object with Lithuania time (treat as local time)
-                const date = new Date(year, month - 1, day, hour, minute);
+                // Try simple approach first
+                let formattedDate;
+                try {
+                    // If it's already a Date object from JSON parsing
+                    if (comment.sukurimo_data instanceof Date) {
+                        formattedDate = comment.sukurimo_data.toLocaleDateString('lt-LT', {
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                        });
+                    } else {
+                        // If it's a string, try different parsing methods
+                        const dateStr = comment.sukurimo_data.toString();
 
-                const formattedDate = date.toLocaleDateString('lt-LT', {
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                });
+                        // Method 1: Direct parsing
+                        let date = new Date(dateStr);
+
+                        // Method 2: If that fails, try with 'T' replacement
+                        if (isNaN(date.getTime())) {
+                            date = new Date(dateStr.replace(' ', 'T'));
+                        }
+
+                        // Method 3: Manual parsing if still fails
+                        if (isNaN(date.getTime())) {
+                            const [datePart, timePart] = dateStr.split(' ');
+                            const [year, month, day] = datePart.split('-');
+                            const [hour, minute] = timePart.split(':');
+                            date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day), parseInt(hour), parseInt(minute));
+                        }
+
+                        formattedDate = date.toLocaleDateString('lt-LT', {
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                        });
+                    }
+                } catch (error) {
+                    console.error('Date parsing error:', error, comment.sukurimo_data);
+                    formattedDate = comment.sukurimo_data; // Fallback to raw value
+                }
 
                 return `
                     <div class="comment-card">
