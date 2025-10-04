@@ -150,8 +150,6 @@ def get_komentarai():
             return jsonify({"error": "Nepavyko prisijungti prie duomenų bazės"}), 500
 
         cursor = connection.cursor(dictionary=True)
-        # Set timezone to Lithuania for reading dates
-        cursor.execute("SET time_zone = '+03:00'")
         cursor.execute("""
             SELECT id, vardas, el_pastas, komentaras, sukurimo_data
             FROM komentarai
@@ -195,9 +193,6 @@ def add_komentaras():
                 sukurimo_data DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         """)
-
-        # Set timezone to Lithuania before inserting
-        cursor.execute("SET time_zone = '+03:00'")
 
         cursor.execute("""
             INSERT INTO komentarai (vardas, el_pastas, komentaras)
