@@ -387,53 +387,19 @@
             }
 
             renderComment(comment) {
-                // Debug: check what we're getting from MySQL
-                console.log('MySQL date:', comment.sukurimo_data, typeof comment.sukurimo_data);
+                // MySQL returns GMT string: "Sat, 04 Oct 2025 12:45:51 GMT"
+                // Parse it and convert to Lithuania timezone
+                const date = new Date(comment.sukurimo_data);
 
-                // Try simple approach first
-                let formattedDate;
-                try {
-                    // If it's already a Date object from JSON parsing
-                    if (comment.sukurimo_data instanceof Date) {
-                        formattedDate = comment.sukurimo_data.toLocaleDateString('lt-LT', {
-                            year: 'numeric',
-                            month: 'long',
-                            day: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit'
-                        });
-                    } else {
-                        // If it's a string, try different parsing methods
-                        const dateStr = comment.sukurimo_data.toString();
-
-                        // Method 1: Direct parsing
-                        let date = new Date(dateStr);
-
-                        // Method 2: If that fails, try with 'T' replacement
-                        if (isNaN(date.getTime())) {
-                            date = new Date(dateStr.replace(' ', 'T'));
-                        }
-
-                        // Method 3: Manual parsing if still fails
-                        if (isNaN(date.getTime())) {
-                            const [datePart, timePart] = dateStr.split(' ');
-                            const [year, month, day] = datePart.split('-');
-                            const [hour, minute] = timePart.split(':');
-                            date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day), parseInt(hour), parseInt(minute));
-                        }
-
-                        formattedDate = date.toLocaleDateString('lt-LT', {
-                            year: 'numeric',
-                            month: 'long',
-                            day: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit'
-                        });
-                    }
-                } catch (error) {
-                    console.error('Date parsing error:', error, comment.sukurimo_data);
-                    formattedDate = comment.sukurimo_data; // Fallback to raw value
-                }
+                // Convert to Lithuania timezone (GMT+3)
+                const formattedDate = date.toLocaleDateString('lt-LT', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    timeZone: 'Europe/Vilnius'
+                });
 
                 return `
                     <div class="comment-card">
