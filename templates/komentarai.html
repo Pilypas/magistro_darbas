@@ -387,14 +387,25 @@
             }
 
             renderComment(comment) {
-    // Tik parodyti taip, kaip ateina iš API/DB
     const raw = comment.sukurimo_data;
 
-    // Jei API kartais grąžina ISO (pvz. "2025-10-04T13:48:12Z"),
-    // normalizuojam į "YYYY-MM-DD HH:MM:SS" be laiko juostos:
-    const shown = (typeof raw === 'string')
-        ? raw.replace('T', ' ').replace('Z', '').split('.')[0]
-        : '';
+    // Bandome sukurti Date objektą
+    const date = new Date(raw);
+
+    // Jei pavyko, formatuojam lietuviškai
+    let shown = raw;
+    if (!isNaN(date)) {
+        shown = date.toLocaleString('lt-LT', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false,
+            timeZone: 'UTC'   // !!! kad nerodytų poslinkio +3h
+        });
+    }
 
     return `
         <div class="comment-card">
@@ -417,6 +428,7 @@
         </div>
     `;
 }
+
 
 
             renderEmptyState() {
