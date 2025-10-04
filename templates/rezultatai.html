@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="lt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Imputacijos rezultatai - Duomenų analizės sistema</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .navbar-brand {
+            font-weight: bold;
+        }
+        .navbar-nav .nav-link {
+            font-weight: 500;
+            transition: color 0.3s ease;
+        }
+        .navbar-nav .nav-link:hover {
+            color: #0d6efd !important;
+        }
+        .navbar {
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        body {
+            padding-top: 80px;
+            background-color: #f8f9fa;
+        }
+
+        .result-card {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            cursor: pointer;
+        }
+
+        .result-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 15px rgba(0,0,0,0.15);
+        }
+
+        .result-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .result-filename {
+            font-weight: bold;
+            color: #495057;
+            font-size: 1.1rem;
+        }
+
+        .result-date {
+            color: #6c757d;
+            font-size: 0.9rem;
+        }
+
+        .result-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        .stat-item {
+            text-align: center;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .stat-value {
+            font-weight: bold;
+            font-size: 1.2rem;
+            color: #495057;
+        }
+
+        .stat-label {
+            font-size: 0.8rem;
+            color: #6c757d;
+            text-transform: uppercase;
+        }
+
+        .model-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 15px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+
+        .model-rf {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+
+        .model-xgb {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 15px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+
+        .status-baigtas {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-vykdomas {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .status-klaida {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .page-header {
+            text-align: center;
+            margin-bottom: 40px;
+            color: #495057;
+        }
+
+        .no-results {
+            text-align: center;
+            padding: 50px 20px;
+            background: white;
+            border-radius: 15px;
+            color: #6c757d;
+        }
+
+        .results-icon {
+            color: #667eea;
+            margin-right: 10px;
+        }
+
+        .download-btn {
+            background: linear-gradient(135deg, #28a745, #20c997);
+            border: none;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            transition: transform 0.2s ease;
+        }
+
+        .download-btn:hover {
+            transform: translateY(-1px);
+            color: white;
+        }
+
+        .view-btn {
+            background: linear-gradient(135deg, #007bff, #6f42c1);
+            border: none;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            transition: transform 0.2s ease;
+            margin-right: 10px;
+        }
+
+        .view-btn:hover {
+            transform: translateY(-1px);
+            color: white;
+        }
+
+        .result-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .submenu {
+            background: rgba(0,123,255,0.1);
+            padding: 8px 16px;
+            margin: 0 8px;
+            border-radius: 20px;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-light bg-white fixed-top">
+        <div class="container">
+            <a class="navbar-brand" href="/">
+                <i class="fas fa-chart-line text-primary me-2"></i>
+                Duomenų analizės sistema
+            </a>
+
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">
+                            <i class="fas fa-home me-1"></i>
+                            Pradžia
+                        </a>
+                    </li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="fas fa-magic me-1"></i>
+                            Imputacija
+                        </a>
+                        <ul class="dropdown-menu" aria-labelledby="navbarDropdown">
+                            <li><a class="dropdown-item" href="/imputacija">
+                                <i class="fas fa-upload me-2"></i>Duomenų apdorojimas
+                            </a></li>
+                            <li><a class="dropdown-item active" href="/rezultatai">
+                                <i class="fas fa-chart-bar me-2"></i>Rezultatai
+                            </a></li>
+                        </ul>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/komentarai">
+                            <i class="fas fa-comments me-1"></i>
+                            Komentarai
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/apie">
+                            <i class="fas fa-info-circle me-1"></i>
+                            Apie
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="page-header">
+            <h1><i class="fas fa-chart-bar results-icon"></i>Imputacijos rezultatai</h1>
+            <p class="lead">Peržiūrėkite visus atliktus duomenų užpildymo bandymus</p>
+        </div>
+
+        <!-- Pranešimų zona -->
+        <div id="alertContainer"></div>
+
+        <!-- Rezultatų sąrašas -->
+        <div id="resultsContainer">
+            <div class="text-center">
+                <i class="fas fa-spinner fa-spin fa-2x text-primary"></i>
+                <p class="mt-2">Kraunami rezultatai...</p>
+            </div>
+        </div>
+    </div>
+
+    <footer class="bg-dark text-light py-4 mt-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-md-6">
+                    <h5><i class="fas fa-chart-line me-2"></i>Duomenų analizės sistema</h5>
+                    <p class="text-muted">
+                        Įrankis, leidžiantis automatizuoti duomenų analizę ir atrasti prognozavimo galimybes.
+                    </p>
+                </div>
+                <div class="col-md-3">
+                    <h6>Sistemos funkcijos</h6>
+                    <ul class="list-unstyled">
+                        <li><a href="/imputacija" class="text-light text-decoration-none">
+                            <i class="fas fa-magic me-1"></i>Imputacija
+                        </a></li>
+                        <li><a href="/rezultatai" class="text-light text-decoration-none">
+                            <i class="fas fa-chart-bar me-1"></i>Rezultatai
+                        </a></li>
+                        <li><a href="/komentarai" class="text-light text-decoration-none">
+                            <i class="fas fa-comments me-1"></i>Komentarai
+                        </a></li>
+                    </ul>
+                </div>
+                <div class="col-md-3">
+                    <h6>Nuorodos</h6>
+                    <ul class="list-unstyled">
+                        <li><a href="/" class="text-light text-decoration-none">
+                            <i class="fas fa-home me-1"></i>Pradžia
+                        </a></li>
+                        <li><a href="/apie" class="text-light text-decoration-none">
+                            <i class="fas fa-info-circle me-1"></i>Apie projektą
+                        </a></li>
+                        <li><a href="https://github.com" class="text-light text-decoration-none" target="_blank">
+                            <i class="fab fa-github me-1"></i>GitHub
+                        </a></li>
+                    </ul>
+                </div>
+            </div>
+            <hr class="my-4">
+            <div class="row align-items-center">
+                <div class="col-md-6">
+                    <p class="mb-0 text-muted" style="color:white !important;">
+                        &copy; 2025 Duomenų analizės sistema. Visos teisės saugomos.
+                    </p>
+                </div>
+                <div class="col-md-6 text-end">
+                    <small class="text-muted" style="color:white !important;">
+                        Darbo autorius: Irmantas Pilypas
+                    </small>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Rezultatų valdymas
+        class ResultsManager {
+            constructor() {
+                this.resultsContainer = document.getElementById('resultsContainer');
+                this.alertContainer = document.getElementById('alertContainer');
+
+                this.loadResults();
+            }
+
+            showAlert(message, type = 'success') {
+                const alertDiv = document.createElement('div');
+                alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+                alertDiv.innerHTML = `
+                    ${message}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                `;
+
+                this.alertContainer.innerHTML = '';
+                this.alertContainer.appendChild(alertDiv);
+
+                setTimeout(() => {
+                    if (alertDiv) {
+                        alertDiv.remove();
+                    }
+                }, 5000);
+            }
+
+            async loadResults() {
+                try {
+                    const response = await fetch('/api/rezultatai');
+                    const data = await response.json();
+
+                    if (response.ok) {
+                        this.renderResults(data.rezultatai);
+                    } else {
+                        this.showAlert(data.error || 'Nepavyko įkelti rezultatų', 'danger');
+                        this.renderEmptyState();
+                    }
+                } catch (error) {
+                    console.error('Error loading results:', error);
+                    this.showAlert('Įvyko klaida kraunant rezultatus', 'danger');
+                    this.renderEmptyState();
+                }
+            }
+
+            renderResults(results) {
+                if (!results || results.length === 0) {
+                    this.renderEmptyState();
+                    return;
+                }
+
+                const resultsHtml = results.map(result => this.renderResult(result)).join('');
+
+                this.resultsContainer.innerHTML = `
+                    <h3 class="mb-4"><i class="fas fa-list me-2"></i>Visi rezultatai (${results.length})</h3>
+                    ${resultsHtml}
+                `;
+            }
+
+            renderResult(result) {
+                const date = new Date(result.sukurimo_data);
+                const formattedDate = date.toLocaleDateString('lt-LT', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    timeZone: 'Europe/Vilnius'
+                });
+
+                const modelClass = result.modelio_tipas === 'random_forest' ? 'model-rf' : 'model-xgb';
+                const modelText = result.modelio_tipas === 'random_forest' ? 'Random Forest' : 'XGBoost';
+
+                return `
+                    <div class="result-card" onclick="window.location.href='/rezultatai/${result.rezultato_id}'">
+                        <div class="result-header">
+                            <div>
+                                <div class="result-filename">
+                                    <i class="fas fa-file-csv me-2"></i>${this.escapeHtml(result.originalus_failas)}
+                                </div>
+                                <span class="model-badge ${modelClass}">${modelText}</span>
+                                <span class="status-badge status-${result.busena}">${this.getStatusText(result.busena)}</span>
+                            </div>
+                            <div class="result-date">
+                                <i class="fas fa-calendar me-1"></i>${formattedDate}
+                            </div>
+                        </div>
+
+                        <div class="result-stats">
+                            <div class="stat-item">
+                                <div class="stat-value">${result.originalus_trukstamu_kiekis}</div>
+                                <div class="stat-label">Trūkstamų pradžioje</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-value">${result.imputuotas_trukstamu_kiekis}</div>
+                                <div class="stat-label">Trūkstamų po apdorojimo</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-value">${result.apdorotu_stulpeliu_kiekis}</div>
+                                <div class="stat-label">Apdoroti stulpeliai</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-value">${result.n_estimators}</div>
+                                <div class="stat-label">N Estimators</div>
+                            </div>
+                        </div>
+
+                        <div class="result-actions" onclick="event.stopPropagation()">
+                            <button class="btn view-btn" onclick="window.location.href='/rezultatai/${result.rezultato_id}'">
+                                <i class="fas fa-eye me-1"></i>Peržiūrėti
+                            </button>
+                            <button class="btn download-btn" onclick="this.downloadFile('${result.imputuotas_failas}')">
+                                <i class="fas fa-download me-1"></i>Parsisiųsti
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }
+
+            renderEmptyState() {
+                this.resultsContainer.innerHTML = `
+                    <div class="no-results">
+                        <i class="fas fa-chart-bar fa-3x mb-3"></i>
+                        <h4>Kol kas nėra rezultatų</h4>
+                        <p>Atlikite pirmąjį duomenų užpildymą <a href="/imputacija">imputacijos puslapyje</a>!</p>
+                    </div>
+                `;
+            }
+
+            getStatusText(status) {
+                const statusMap = {
+                    'baigtas': 'Baigtas',
+                    'vykdomas': 'Vykdomas',
+                    'klaida': 'Klaida'
+                };
+                return statusMap[status] || status;
+            }
+
+            downloadFile(filename) {
+                window.location.href = `/download/${filename}`;
+            }
+
+            escapeHtml(text) {
+                const map = {
+                    '&': '&amp;',
+                    '<': '&lt;',
+                    '>': '&gt;',
+                    '"': '&quot;',
+                    "'": '&#039;'
+                };
+                return text.replace(/[&<>"']/g, function(m) { return map[m]; });
+            }
+        }
+
+        // Inicializuojame rezultatų valdyklę
+        document.addEventListener('DOMContentLoaded', () => {
+            new ResultsManager();
+        });
+
+        // Add download method to result actions
+        window.downloadFile = function(filename) {
+            window.location.href = `/download/${filename}`;
+        };
+    </script>
+</body>
+</html>

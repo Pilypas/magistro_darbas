@@ -22,6 +22,8 @@ from werkzeug.utils import secure_filename
 import mysql.connector
 from mysql.connector import Error
 from datetime import datetime
+import uuid
+import json as json_module
 
 app = Flask(__name__)
 CORS(app)
@@ -86,6 +88,50 @@ class DatabaseManager:
 # Initialize database manager - only if MySQL is properly configured
 db_manager = DatabaseManager(DB_CONFIG, enabled=MYSQL_ENABLED)
 
+# Database initialization functions
+def init_database_tables():
+    """Initialize all required database tables"""
+    if not MYSQL_ENABLED:
+        return
+
+    try:
+        connection = db_manager.get_connection()
+        if not connection:
+            return
+
+        cursor = connection.cursor()
+
+        # Create imputacijos_rezultatai table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS imputacijos_rezultatai (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                rezultato_id VARCHAR(36) UNIQUE NOT NULL,
+                originalus_failas VARCHAR(255) NOT NULL,
+                imputuotas_failas VARCHAR(255) NOT NULL,
+                modelio_tipas ENUM('random_forest', 'xgboost') NOT NULL,
+                n_estimators INT NOT NULL,
+                random_state INT NOT NULL,
+                originalus_trukstamu_kiekis INT NOT NULL,
+                imputuotas_trukstamu_kiekis INT NOT NULL,
+                apdorotu_stulpeliu_kiekis INT NOT NULL,
+                modelio_metrikos JSON,
+                pozymiu_svarba JSON,
+                grafikai JSON,
+                sukurimo_data DATETIME DEFAULT CURRENT_TIMESTAMP,
+                busena ENUM('vykdomas', 'baigtas', 'klaida') DEFAULT 'vykdomas'
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        """)
+
+        cursor.close()
+        connection.commit()
+        print("Database tables initialized successfully")
+
+    except Error as e:
+        print(f"Error initializing database tables: {e}")
+
+# Initialize tables on startup
+init_database_tables()
+
 # MLImputer wrapper klasė, kuri naudoja atskirų modelių failus
 class MLImputer:
     """Wrapper klasė, kuri pasirenka tinkamą modelį pagal model_type"""
@@ -136,6 +182,81 @@ def apie():
 @app.route('/komentarai')
 def komentarai():
     return send_file('templates/komentarai.html')
+
+@app.route('/rezultatai')
+def rezultatai():
+    return send_file('templates/rezultatai.html')
+
+@app.route('/rezultatai/<result_id>')
+def rezultatas_detali(result_id):
+    return send_file('templates/rezultatas_detali.html')
+
+@app.route('/api/rezultatai', methods=['GET'])
+def get_rezultatai():
+    """Get all imputation results"""
+    if not MYSQL_ENABLED:
+        return jsonify({
+            "rezultatai": [],
+            "message": "Rezultatų funkcija neprieinama - duomenų bazė nesukonfigūruota"
+        })
+
+    try:
+        connection = db_manager.get_connection()
+        if not connection:
+            return jsonify({"error": "Nepavyko prisijungti prie duomenų bazės"}), 500
+
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT rezultato_id, originalus_failas, imputuotas_failas,
+                   modelio_tipas, n_estimators, random_state,
+                   originalus_trukstamu_kiekis, imputuotas_trukstamu_kiekis,
+                   apdorotu_stulpeliu_kiekis, sukurimo_data, busena
+            FROM imputacijos_rezultatai
+            ORDER BY sukurimo_data DESC
+        """)
+        rezultatai = cursor.fetchall()
+        cursor.close()
+
+        return jsonify({"rezultatai": rezultatai})
+
+    except Error as e:
+        return jsonify({"error": f"Duomenų bazės klaida: {str(e)}"}), 500
+
+@app.route('/api/rezultatai/<result_id>', methods=['GET'])
+def get_rezultatas(result_id):
+    """Get detailed imputation result"""
+    if not MYSQL_ENABLED:
+        return jsonify({"error": "Rezultatų funkcija neprieinama - duomenų bazė nesukonfigūruota"}), 503
+
+    try:
+        connection = db_manager.get_connection()
+        if not connection:
+            return jsonify({"error": "Nepavyko prisijungti prie duomenų bazės"}), 500
+
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT * FROM imputacijos_rezultatai
+            WHERE rezultato_id = %s
+        """, (result_id,))
+
+        rezultatas = cursor.fetchone()
+        cursor.close()
+
+        if not rezultatas:
+            return jsonify({"error": "Rezultatas nerastas"}), 404
+
+        # Parse JSON fields
+        if rezultatas['modelio_metrikos']:
+            rezultatas['modelio_metrikos'] = json_module.loads(rezultatas['modelio_metrikos'])
+        if rezultatas['pozymiu_svarba']:
+            rezultatas['pozymiu_svarba'] = json_module.loads(rezultatas['pozymiu_svarba'])
+        if rezultatas['grafikai']:
+            rezultatas['grafikai'] = json_module.loads(rezultatas['grafikai'])
+
+        return jsonify({"rezultatas": rezultatas})
+
+    except Error as e:
+        return jsonify({"error": f"Duomenų bazės klaida: {str(e)}"}), 500
 
 @app.route('/api/komentarai', methods=['GET'])
 def get_komentarai():
@@ -346,40 +467,81 @@ def analyze_data(filename):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+def save_imputation_result(filename, imputed_filename, model_type, n_estimators, random_state,
+                          original_missing, imputed_missing, plots, feature_importance, model_metrics):
+    """Save imputation result to database"""
+    if not MYSQL_ENABLED:
+        return None
+
+    try:
+        connection = db_manager.get_connection()
+        if not connection:
+            return None
+
+        result_id = str(uuid.uuid4())
+
+        cursor = connection.cursor()
+        cursor.execute("""
+            INSERT INTO imputacijos_rezultatai (
+                rezultato_id, originalus_failas, imputuotas_failas,
+                modelio_tipas, n_estimators, random_state,
+                originalus_trukstamu_kiekis, imputuotas_trukstamu_kiekis,
+                apdorotu_stulpeliu_kiekis, modelio_metrikos,
+                pozymiu_svarba, grafikai, busena
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (
+            result_id, filename, imputed_filename, model_type,
+            n_estimators, random_state, original_missing, imputed_missing,
+            len(feature_importance) if feature_importance else 0,
+            json_module.dumps(model_metrics) if model_metrics else None,
+            json_module.dumps(feature_importance) if feature_importance else None,
+            json_module.dumps(plots) if plots else None,
+            'baigtas'
+        ))
+
+        connection.commit()
+        cursor.close()
+
+        return result_id
+
+    except Error as e:
+        print(f"Error saving imputation result: {e}")
+        return None
+
 @app.route('/impute/<filename>', methods=['POST'])
 def impute_missing_values(filename):
     try:
         filepath = os.path.join(UPLOAD_FOLDER, secure_filename(filename))
         if not os.path.exists(filepath):
             return jsonify({"error": "Failas nerastas"}), 404
-        
+
         df = pd.read_csv(filepath)
         original_missing = df.isnull().sum().sum()
-        
+
         if original_missing == 0:
             return jsonify({"message": "Nėra trūkstamų reikšmių užpildymui"}), 400
-        
+
         # Get parameters from request
         data = request.get_json() or {}
         model_type = data.get('model_type', 'random_forest')
         n_estimators = data.get('n_estimators', 100)
         random_state = data.get('random_state', 42)
-        
+
         # Perform imputation
         imputer = MLImputer(model_type=model_type, n_estimators=n_estimators, random_state=random_state)
         df_imputed = imputer.fit_transform(df)
-        
+
         # Save imputed data
         imputed_filename = f"imputed_{filename}"
         imputed_filepath = os.path.join(UPLOAD_FOLDER, imputed_filename)
         df_imputed.to_csv(imputed_filepath, index=False)
-        
+
         # Generate comparison plots
         plots = {}
-        
+
         # Before/After missing values comparison
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
-        
+
         # Original missing values
         missing_original = df.isnull().sum()
         missing_original = missing_original[missing_original > 0]
@@ -389,7 +551,7 @@ def impute_missing_values(filename):
             ax1.set_xlabel('Stulpeliai')
             ax1.set_ylabel('Trūkstamų kiekis')
             ax1.tick_params(axis='x', rotation=45)
-        
+
         # After imputation (should be zero)
         missing_imputed = df_imputed.isnull().sum()
         missing_imputed = missing_imputed[missing_imputed > 0]
@@ -401,44 +563,51 @@ def impute_missing_values(filename):
         ax2.set_xlabel('Stulpeliai')
         ax2.set_ylabel('Trūkstamų kiekis')
         ax2.tick_params(axis='x', rotation=45)
-        
+
         plt.tight_layout()
         img_buffer = io.BytesIO()
         plt.savefig(img_buffer, format='png', dpi=150, bbox_inches='tight')
         img_buffer.seek(0)
         plots['comparison'] = base64.b64encode(img_buffer.getvalue()).decode()
         plt.close()
-        
+
         # Feature importance plot
         feature_importance = imputer.get_feature_importance()
         if feature_importance:
-            fig, axes = plt.subplots(len(feature_importance), 1, 
+            fig, axes = plt.subplots(len(feature_importance), 1,
                                    figsize=(12, 4 * len(feature_importance)))
             if len(feature_importance) == 1:
                 axes = [axes]
-            
+
             for idx, (col, importance) in enumerate(feature_importance.items()):
                 if importance:
                     features = list(importance.keys())
                     importances = list(importance.values())
-                    
+
                     axes[idx].barh(features, importances)
                     axes[idx].set_title(f'Požymių svarba užpildant: {col}')
                     axes[idx].set_xlabel('Svarba')
-            
+
             plt.tight_layout()
             img_buffer = io.BytesIO()
             plt.savefig(img_buffer, format='png', dpi=150, bbox_inches='tight')
             img_buffer.seek(0)
             plots['feature_importance'] = base64.b64encode(img_buffer.getvalue()).decode()
             plt.close()
-        
+
         # Generate model performance plots
         model_metrics = imputer.get_model_metrics()
         performance_plots = generate_model_performance_plots(model_metrics)
         plots.update(performance_plots)
-        
-        return jsonify({
+
+        # Save result to database
+        result_id = save_imputation_result(
+            filename, imputed_filename, model_type, n_estimators, random_state,
+            int(original_missing), int(df_imputed.isnull().sum().sum()),
+            plots, feature_importance, model_metrics
+        )
+
+        response_data = {
             "message": "Užpildymas sėkmingai baigtas",
             "imputed_filename": imputed_filename,
             "original_missing": int(original_missing),
@@ -447,8 +616,13 @@ def impute_missing_values(filename):
             "feature_importance": feature_importance,
             "model_metrics": model_metrics,
             "model_type": model_type
-        })
-    
+        }
+
+        if result_id:
+            response_data["result_id"] = result_id
+
+        return jsonify(response_data)
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
