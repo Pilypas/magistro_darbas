@@ -387,9 +387,13 @@
             }
 
             renderComment(comment) {
-                // Parse the date as-is from MySQL (already in correct Lithuania time)
-                const dateStr = comment.sukurimo_data.replace(' ', 'T');
-                const date = new Date(dateStr);
+                // Parse MySQL datetime format manually: "2025-10-03 23:29:43"
+                const [datePart, timePart] = comment.sukurimo_data.split(' ');
+                const [year, month, day] = datePart.split('-');
+                const [hour, minute] = timePart.split(':');
+
+                // Create date object with Lithuania time (treat as local time)
+                const date = new Date(year, month - 1, day, hour, minute);
 
                 const formattedDate = date.toLocaleDateString('lt-LT', {
                     year: 'numeric',
