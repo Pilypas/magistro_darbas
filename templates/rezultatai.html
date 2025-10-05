@@ -224,6 +224,9 @@
                             <li><a class="dropdown-item active" href="/rezultatai">
                                 <i class="fas fa-chart-bar me-2"></i>Rezultatai
                             </a></li>
+                            <li><a class="dropdown-item" href="/palyginimas">
+                                <i class="fas fa-balance-scale me-2"></i>Palyginimas
+                            </a></li>
                         </ul>
                     </li>
                     <li class="nav-item">
@@ -251,6 +254,23 @@
 
         <!-- Pranešimų zona -->
         <div id="alertContainer"></div>
+
+        <!-- Palyginimo valdymas -->
+        <div id="comparisonControls" class="mb-4" style="display: none;">
+            <div class="d-flex justify-content-between align-items-center p-3 bg-light rounded">
+                <div>
+                    <span id="selectedCount">0</span> rezultatų pažymėta palyginimui
+                </div>
+                <div>
+                    <button class="btn btn-outline-secondary me-2" id="clearSelection">
+                        <i class="fas fa-times me-1"></i>Išvalyti
+                    </button>
+                    <button class="btn btn-primary" id="compareSelected" disabled>
+                        <i class="fas fa-chart-line me-1"></i>Palyginti rezultatus
+                    </button>
+                </div>
+            </div>
+        </div>
 
         <!-- Rezultatų sąrašas -->
         <div id="resultsContainer">
@@ -391,14 +411,22 @@
                 const modelText = result.modelio_tipas === 'random_forest' ? 'Random Forest' : 'XGBoost';
 
                 return `
-                    <div class="result-card" onclick="window.location.href='/rezultatai/${result.rezultato_id}'">
+                    <div class="result-card" onclick="this.handleCardClick(event, '${result.rezultato_id}')">
                         <div class="result-header">
                             <div>
-                                <div class="result-filename">
-                                    <i class="fas fa-file-csv me-2"></i>${this.escapeHtml(result.originalus_failas)}
+                                <div class="d-flex align-items-center">
+                                    <input type="checkbox" class="form-check-input me-3 result-checkbox"
+                                           data-result-id="${result.rezultato_id}"
+                                           onclick="event.stopPropagation()"
+                                           onchange="window.resultManager.updateSelection()">
+                                    <div class="result-filename">
+                                        <i class="fas fa-file-csv me-2"></i>${this.escapeHtml(result.originalus_failas)}
+                                    </div>
                                 </div>
-                                <span class="model-badge ${modelClass}">${modelText}</span>
-                                <span class="status-badge status-${result.busena}">${this.getStatusText(result.busena)}</span>
+                                <div class="mt-2">
+                                    <span class="model-badge ${modelClass}">${modelText}</span>
+                                    <span class="status-badge status-${result.busena}">${this.getStatusText(result.busena)}</span>
+                                </div>
                             </div>
                             <div class="result-date">
                                 <i class="fas fa-calendar me-1"></i>${formattedDate}
@@ -434,6 +462,78 @@
                         </div>
                     </div>
                 `;
+            }
+
+            handleCardClick(event, resultId) {
+                // Only navigate if not clicking on checkbox or buttons
+                if (!event.target.closest('.result-checkbox') && !event.target.closest('.result-actions')) {
+                    window.location.href = `/rezultatai/${resultId}`;
+                }
+            }
+
+            updateSelection() {
+                const checkboxes = document.querySelectorAll('.result-checkbox:checked');
+                const count = checkboxes.length;
+                const comparisonControls = document.getElementById('comparisonControls');
+                const selectedCount = document.getElementById('selectedCount');
+                const compareBtn = document.getElementById('compareSelected');
+
+                selectedCount.textContent = count;
+
+                if (count >= 2) {
+                    comparisonControls.style.display = 'block';
+                    compareBtn.disabled = false;
+                } else if (count === 1) {
+                    comparisonControls.style.display = 'block';
+                    compareBtn.disabled = true;
+                } else {
+                    comparisonControls.style.display = 'none';
+                }
+            }
+
+            getSelectedResults() {
+                const checkboxes = document.querySelectorAll('.result-checkbox:checked');
+                return Array.from(checkboxes).map(cb => cb.dataset.resultId);
+            }
+
+            clearSelection() {
+                const checkboxes = document.querySelectorAll('.result-checkbox');
+                checkboxes.forEach(cb => cb.checked = false);
+                this.updateSelection();
+            }
+
+            async compareResults() {
+                const selectedIds = this.getSelectedResults();
+
+                if (selectedIds.length < 2) {
+                    this.showAlert('Pasirinkite bent 2 rezultatus palyginimui', 'warning');
+                    return;
+                }
+
+                try {
+                    const response = await fetch('/api/palyginimas', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            result_ids: selectedIds
+                        })
+                    });
+
+                    const data = await response.json();
+
+                    if (response.ok) {
+                        // Store comparison data and navigate to comparison page
+                        sessionStorage.setItem('comparisonData', JSON.stringify(data));
+                        window.location.href = '/palyginimas';
+                    } else {
+                        this.showAlert(data.error || 'Klaida vykdant palyginimą', 'danger');
+                    }
+                } catch (error) {
+                    console.error('Error comparing results:', error);
+                    this.showAlert('Įvyko klaida vykdant palyginimą', 'danger');
+                }
             }
 
             renderEmptyState() {
@@ -473,7 +573,16 @@
 
         // Inicializuojame rezultatų valdyklę
         document.addEventListener('DOMContentLoaded', () => {
-            new ResultsManager();
+            window.resultManager = new ResultsManager();
+
+            // Bind comparison control events
+            document.getElementById('clearSelection').addEventListener('click', () => {
+                window.resultManager.clearSelection();
+            });
+
+            document.getElementById('compareSelected').addEventListener('click', () => {
+                window.resultManager.compareResults();
+            });
         });
 
         // Add download method to result actions

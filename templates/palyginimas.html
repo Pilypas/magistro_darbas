@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="lt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rezultatų palyginimas - Duomenų analizės sistema</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .navbar-brand {
+            font-weight: bold;
+        }
+        .navbar-nav .nav-link {
+            font-weight: 500;
+            transition: color 0.3s ease;
+        }
+        .navbar-nav .nav-link:hover {
+            color: #0d6efd !important;
+        }
+        .navbar {
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        body {
+            padding-top: 80px;
+            background-color: #f8f9fa;
+        }
+
+        .comparison-card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 25px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .comparison-header {
+            border-bottom: 2px solid #e9ecef;
+            padding-bottom: 20px;
+            margin-bottom: 25px;
+        }
+
+        .comparison-title {
+            color: #495057;
+            margin-bottom: 10px;
+        }
+
+        .model-comparison-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .model-stats-card {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            border-left: 4px solid #007bff;
+        }
+
+        .model-stats-card.rf {
+            border-left-color: #28a745;
+        }
+
+        .model-stats-card.xgb {
+            border-left-color: #ffc107;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .stat-box {
+            text-align: center;
+            padding: 10px;
+            background: white;
+            border-radius: 8px;
+        }
+
+        .stat-value {
+            font-weight: bold;
+            font-size: 1.2rem;
+            color: #495057;
+        }
+
+        .stat-label {
+            font-size: 0.8rem;
+            color: #6c757d;
+            text-transform: uppercase;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 400px;
+            margin: 20px 0;
+        }
+
+        .recommendation-card {
+            border-left: 4px solid;
+            margin-bottom: 15px;
+            padding: 15px;
+            border-radius: 0 8px 8px 0;
+        }
+
+        .recommendation-high {
+            border-left-color: #dc3545;
+            background: #f8d7da;
+        }
+
+        .recommendation-medium {
+            border-left-color: #ffc107;
+            background: #fff3cd;
+        }
+
+        .recommendation-low {
+            border-left-color: #28a745;
+            background: #d1ecf1;
+        }
+
+        .results-summary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+
+        .back-btn {
+            background: linear-gradient(135deg, #6c757d, #495057);
+            border: none;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 10px;
+            font-weight: 500;
+            transition: transform 0.2s ease;
+        }
+
+        .back-btn:hover {
+            transform: translateY(-1px);
+            color: white;
+        }
+
+        .loading-container {
+            text-align: center;
+            padding: 100px 20px;
+        }
+
+        .error-container {
+            text-align: center;
+            padding: 50px 20px;
+            background: white;
+            border-radius: 15px;
+            color: #6c757d;
+        }
+
+        .winner-badge {
+            display: inline-block;
+            background: linear-gradient(135deg, #28a745, #20c997);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            margin-left: 10px;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-light bg-white fixed-top">
+        <div class="container">
+            <a class="navbar-brand" href="/">
+                <i class="fas fa-chart-line text-primary me-2"></i>
+                Duomenų analizės sistema
+            </a>
+
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">
+                            <i class="fas fa-home me-1"></i>
+                            Pradžia
+                        </a>
+                    </li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="fas fa-magic me-1"></i>
+                            Imputacija
+                        </a>
+                        <ul class="dropdown-menu" aria-labelledby="navbarDropdown">
+                            <li><a class="dropdown-item" href="/imputacija">
+                                <i class="fas fa-upload me-2"></i>Duomenų apdorojimas
+                            </a></li>
+                            <li><a class="dropdown-item" href="/rezultatai">
+                                <i class="fas fa-chart-bar me-2"></i>Rezultatai
+                            </a></li>
+                            <li><a class="dropdown-item active" href="/palyginimas">
+                                <i class="fas fa-balance-scale me-2"></i>Palyginimas
+                            </a></li>
+                        </ul>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/komentarai">
+                            <i class="fas fa-comments me-1"></i>
+                            Komentarai
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/apie">
+                            <i class="fas fa-info-circle me-1"></i>
+                            Apie
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <!-- Loading state -->
+        <div id="loadingContainer" class="loading-container">
+            <i class="fas fa-spinner fa-spin fa-3x text-primary"></i>
+            <h4 class="mt-3">Analizuojami palyginimo duomenys...</h4>
+        </div>
+
+        <!-- Error state -->
+        <div id="errorContainer" class="error-container" style="display: none;">
+            <i class="fas fa-exclamation-triangle fa-3x text-warning mb-3"></i>
+            <h4>Palyginimo duomenų klaida</h4>
+            <p>Nepavyko įkelti palyginimo duomenų. Grįžkite ir pasirinkite rezultatus iš naujo.</p>
+            <a href="/rezultatai" class="btn btn-primary">
+                <i class="fas fa-arrow-left me-2"></i>Grįžti į rezultatus
+            </a>
+        </div>
+
+        <!-- Content container -->
+        <div id="contentContainer" style="display: none;">
+            <!-- Header -->
+            <div class="comparison-card">
+                <div class="comparison-header">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h1 class="comparison-title">
+                                <i class="fas fa-balance-scale me-2 text-primary"></i>
+                                Rezultatų palyginimas
+                            </h1>
+                            <p class="text-muted">Modelių efektyvumo ir tikslumo analizė</p>
+                        </div>
+                        <div>
+                            <a href="/rezultatai" class="btn back-btn">
+                                <i class="fas fa-arrow-left me-2"></i>Grįžti į rezultatus
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Results summary -->
+                <div id="resultsSummary" class="results-summary"></div>
+            </div>
+
+            <!-- Model comparison -->
+            <div class="comparison-card">
+                <h3 class="comparison-title">Modelių palyginimas</h3>
+                <div id="modelComparison" class="model-comparison-grid"></div>
+            </div>
+
+            <!-- Charts -->
+            <div class="comparison-card">
+                <h3 class="comparison-title">Efektyvumo grafikai</h3>
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="chart-container">
+                            <canvas id="accuracyChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="chart-container">
+                            <canvas id="performanceChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recommendations -->
+            <div class="comparison-card" id="recommendationsCard" style="display: none;">
+                <h3 class="comparison-title">Rekomendacijos</h3>
+                <div id="recommendationsContent"></div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="bg-dark text-light py-4 mt-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-md-6">
+                    <h5><i class="fas fa-chart-line me-2"></i>Duomenų analizės sistema</h5>
+                    <p class="text-muted">
+                        Įrankis, leidžiantis automatizuoti duomenų analizę ir atrasti prognozavimo galimybes.
+                    </p>
+                </div>
+                <div class="col-md-3">
+                    <h6>Sistemos funkcijos</h6>
+                    <ul class="list-unstyled">
+                        <li><a href="/imputacija" class="text-light text-decoration-none">
+                            <i class="fas fa-magic me-1"></i>Imputacija
+                        </a></li>
+                        <li><a href="/rezultatai" class="text-light text-decoration-none">
+                            <i class="fas fa-chart-bar me-1"></i>Rezultatai
+                        </a></li>
+                        <li><a href="/komentarai" class="text-light text-decoration-none">
+                            <i class="fas fa-comments me-1"></i>Komentarai
+                        </a></li>
+                    </ul>
+                </div>
+                <div class="col-md-3">
+                    <h6>Nuorodos</h6>
+                    <ul class="list-unstyled">
+                        <li><a href="/" class="text-light text-decoration-none">
+                            <i class="fas fa-home me-1"></i>Pradžia
+                        </a></li>
+                        <li><a href="/apie" class="text-light text-decoration-none">
+                            <i class="fas fa-info-circle me-1"></i>Apie projektą
+                        </a></li>
+                        <li><a href="https://github.com" class="text-light text-decoration-none" target="_blank">
+                            <i class="fab fa-github me-1"></i>GitHub
+                        </a></li>
+                    </ul>
+                </div>
+            </div>
+            <hr class="my-4">
+            <div class="row align-items-center">
+                <div class="col-md-6">
+                    <p class="mb-0 text-muted" style="color:white !important;">
+                        &copy; 2025 Duomenų analizės sistema. Visos teisės saugomos.
+                    </p>
+                </div>
+                <div class="col-md-6 text-end">
+                    <small class="text-muted" style="color:white !important;">
+                        Darbo autorius: Irmantas Pilypas
+                    </small>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        class ComparisonManager {
+            constructor() {
+                this.loadingContainer = document.getElementById('loadingContainer');
+                this.errorContainer = document.getElementById('errorContainer');
+                this.contentContainer = document.getElementById('contentContainer');
+                this.comparisonData = null;
+
+                this.loadComparisonData();
+            }
+
+            loadComparisonData() {
+                try {
+                    const data = sessionStorage.getItem('comparisonData');
+                    if (!data) {
+                        this.showError();
+                        return;
+                    }
+
+                    this.comparisonData = JSON.parse(data);
+                    this.renderComparison();
+                } catch (error) {
+                    console.error('Error loading comparison data:', error);
+                    this.showError();
+                }
+            }
+
+            showError() {
+                this.loadingContainer.style.display = 'none';
+                this.errorContainer.style.display = 'block';
+            }
+
+            renderComparison() {
+                this.loadingContainer.style.display = 'none';
+                this.contentContainer.style.display = 'block';
+
+                const { rezultatai, palyginimo_duomenys } = this.comparisonData;
+
+                this.renderSummary(rezultatai, palyginimo_duomenys);
+                this.renderModelComparison(palyginimo_duomenys.modeliu_palyginimas);
+                this.renderCharts(palyginimo_duomenys);
+                this.renderRecommendations(palyginimo_duomenys.rekomendacijos);
+            }
+
+            renderSummary(results, comparison) {
+                const summary = document.getElementById('resultsSummary');
+                const modelTypes = [...new Set(results.map(r => r.modelio_tipas))];
+
+                summary.innerHTML = `
+                    <h2><i class="fas fa-chart-pie me-2"></i>Palyginimo santrauka</h2>
+                    <div class="row mt-4">
+                        <div class="col-md-3">
+                            <div class="stat-value">${results.length}</div>
+                            <div class="stat-label">Palyginti rezultatai</div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="stat-value">${modelTypes.length}</div>
+                            <div class="stat-label">Modelių tipai</div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="stat-value">${comparison.bendroji_statistika.bendras_trukstamu_uzpildymas}</div>
+                            <div class="stat-label">Iš viso užpildyta</div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="stat-value">${modelTypes.join(', ')}</div>
+                            <div class="stat-label">Naudoti modeliai</div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            renderModelComparison(modelStats) {
+                const container = document.getElementById('modelComparison');
+                let html = '';
+
+                for (const [modelType, stats] of Object.entries(modelStats)) {
+                    const modelClass = modelType === 'random_forest' ? 'rf' : 'xgb';
+                    const modelName = modelType === 'random_forest' ? 'Random Forest' : 'XGBoost';
+
+                    html += `
+                        <div class="model-stats-card ${modelClass}">
+                            <h4>${modelName}</h4>
+                            <div class="stats-grid">
+                                <div class="stat-box">
+                                    <div class="stat-value">${stats.kiekis}</div>
+                                    <div class="stat-label">Bandymų</div>
+                                </div>
+                                <div class="stat-box">
+                                    <div class="stat-value">${stats.vidutinis_uzpildymas.toFixed(1)}</div>
+                                    <div class="stat-label">Vid. užpildymas</div>
+                                </div>
+                                <div class="stat-box">
+                                    <div class="stat-value">${stats.vidutinis_rmse.toFixed(4)}</div>
+                                    <div class="stat-label">Vid. RMSE</div>
+                                </div>
+                                <div class="stat-box">
+                                    <div class="stat-value">${stats.vidutinis_r2.toFixed(4)}</div>
+                                    <div class="stat-label">Vid. R²</div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                container.innerHTML = html;
+            }
+
+            renderCharts(comparisonData) {
+                this.renderAccuracyChart(comparisonData.modeliu_palyginimas);
+                this.renderPerformanceChart(comparisonData.modeliu_palyginimas);
+            }
+
+            renderAccuracyChart(modelStats) {
+                const ctx = document.getElementById('accuracyChart').getContext('2d');
+                const labels = Object.keys(modelStats).map(type =>
+                    type === 'random_forest' ? 'Random Forest' : 'XGBoost'
+                );
+                const r2Data = Object.values(modelStats).map(stats => stats.vidutinis_r2);
+
+                new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Vidutinis R² koeficientas',
+                            data: r2Data,
+                            backgroundColor: ['#28a745', '#ffc107'],
+                            borderColor: ['#1e7e34', '#e0a800'],
+                            borderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'R² koeficiento palyginimas'
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                max: 1
+                            }
+                        }
+                    }
+                });
+            }
+
+            renderPerformanceChart(modelStats) {
+                const ctx = document.getElementById('performanceChart').getContext('2d');
+                const labels = Object.keys(modelStats).map(type =>
+                    type === 'random_forest' ? 'Random Forest' : 'XGBoost'
+                );
+                const rmseData = Object.values(modelStats).map(stats => stats.vidutinis_rmse);
+
+                new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Vidutinis RMSE',
+                            data: rmseData,
+                            backgroundColor: ['#007bff', '#dc3545'],
+                            borderColor: ['#0056b3', '#a71e2a'],
+                            borderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'RMSE palyginimas (mažesnis = geriau)'
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true
+                            }
+                        }
+                    }
+                });
+            }
+
+            renderRecommendations(recommendations) {
+                if (!recommendations || recommendations.length === 0) {
+                    return;
+                }
+
+                const card = document.getElementById('recommendationsCard');
+                const content = document.getElementById('recommendationsContent');
+
+                let html = '';
+                for (const rec of recommendations) {
+                    const priorityClass = rec.prioritetas === 'aukštas' ? 'high' :
+                                        rec.prioritetas === 'vidutinis' ? 'medium' : 'low';
+
+                    html += `
+                        <div class="recommendation-card recommendation-${priorityClass}">
+                            <h6><i class="fas fa-lightbulb me-2"></i>${this.getRecommendationTitle(rec.tipas)}</h6>
+                            <p class="mb-0">${rec.tekstas}</p>
+                        </div>
+                    `;
+                }
+
+                content.innerHTML = html;
+                card.style.display = 'block';
+            }
+
+            getRecommendationTitle(type) {
+                const titles = {
+                    'modelio_pasirinkimas': 'Modelio pasirinkimas',
+                    'duomenu_kokybe': 'Duomenų kokybė',
+                    'parametru_optimizavimas': 'Parametrų optimizavimas'
+                };
+                return titles[type] || 'Rekomendacija';
+            }
+        }
+
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            new ComparisonManager();
+        });
+    </script>
+</body>
+</html>

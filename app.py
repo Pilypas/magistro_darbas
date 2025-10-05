@@ -191,6 +191,10 @@ def rezultatai():
 def rezultatas_detali(result_id):
     return send_file('templates/rezultatas_detali.html')
 
+@app.route('/palyginimas')
+def palyginimas():
+    return send_file('templates/palyginimas.html')
+
 @app.route('/api/rezultatai', methods=['GET'])
 def get_rezultatai():
     """Get all imputation results"""
@@ -257,6 +261,173 @@ def get_rezultatas(result_id):
 
     except Error as e:
         return jsonify({"error": f"Duomenų bazės klaida: {str(e)}"}), 500
+
+@app.route('/api/palyginimas', methods=['POST'])
+def compare_results():
+    """Compare multiple imputation results"""
+    if not MYSQL_ENABLED:
+        return jsonify({"error": "Palyginimo funkcija neprieinama - duomenų bazė nesukonfigūruota"}), 503
+
+    try:
+        data = request.get_json()
+        result_ids = data.get('result_ids', [])
+
+        if len(result_ids) < 2:
+            return jsonify({"error": "Pasirinkite bent 2 rezultatus palyginimui"}), 400
+
+        connection = db_manager.get_connection()
+        if not connection:
+            return jsonify({"error": "Nepavyko prisijungti prie duomenų bazės"}), 500
+
+        cursor = connection.cursor(dictionary=True)
+
+        # Get selected results
+        placeholders = ','.join(['%s'] * len(result_ids))
+        cursor.execute(f"""
+            SELECT * FROM imputacijos_rezultatai
+            WHERE rezultato_id IN ({placeholders})
+            ORDER BY sukurimo_data DESC
+        """, result_ids)
+
+        rezultatai = cursor.fetchall()
+        cursor.close()
+
+        if len(rezultatai) != len(result_ids):
+            return jsonify({"error": "Kai kurie rezultatai nerasti"}), 404
+
+        # Parse JSON fields for each result
+        for rezultatas in rezultatai:
+            if rezultatas['modelio_metrikos']:
+                rezultatas['modelio_metrikos'] = json_module.loads(rezultatas['modelio_metrikos'])
+            if rezultatas['pozymiu_svarba']:
+                rezultatas['pozymiu_svarba'] = json_module.loads(rezultatas['pozymiu_svarba'])
+            if rezultatas['grafikai']:
+                rezultatas['grafikai'] = json_module.loads(rezultatas['grafikai'])
+
+        # Generate comparison data
+        comparison_data = generate_comparison_data(rezultatai)
+
+        return jsonify({
+            "rezultatai": rezultatai,
+            "palyginimo_duomenys": comparison_data
+        })
+
+    except Error as e:
+        return jsonify({"error": f"Duomenų bazės klaida: {str(e)}"}), 500
+
+def generate_comparison_data(results):
+    """Generate comparison analysis data"""
+    comparison = {
+        "bendroji_statistika": {},
+        "modeliu_palyginimas": {},
+        "efektyvumo_rodikliai": {},
+        "rekomendacijos": []
+    }
+
+    # Basic statistics comparison
+    comparison["bendroji_statistika"] = {
+        "rezultatu_skaicius": len(results),
+        "modeliu_tipai": list(set([r['modelio_tipas'] for r in results])),
+        "bendras_trukstamu_uzpildymas": sum([r['originalus_trukstamu_kiekis'] - r['imputuotas_trukstamu_kiekis'] for r in results])
+    }
+
+    # Model comparison
+    model_stats = {}
+    for result in results:
+        model_type = result['modelio_tipas']
+        if model_type not in model_stats:
+            model_stats[model_type] = {
+                "kiekis": 0,
+                "vidutinis_uzpildymas": 0,
+                "vidutinis_rmse": 0,
+                "vidutinis_r2": 0,
+                "vidutinis_laikas": 0
+            }
+
+        model_stats[model_type]["kiekis"] += 1
+        uzpildymas = result['originalus_trukstamu_kiekis'] - result['imputuotas_trukstamu_kiekis']
+        model_stats[model_type]["vidutinis_uzpildymas"] += uzpildymas
+
+        # Calculate average metrics from model_metrics
+        if result['modelio_metrikos']:
+            rmse_values = []
+            r2_values = []
+            for col_metrics in result['modelio_metrikos'].values():
+                if col_metrics.get('rmse'):
+                    rmse_values.append(col_metrics['rmse'])
+                if col_metrics.get('r2'):
+                    r2_values.append(col_metrics['r2'])
+
+            if rmse_values:
+                model_stats[model_type]["vidutinis_rmse"] += sum(rmse_values) / len(rmse_values)
+            if r2_values:
+                model_stats[model_type]["vidutinis_r2"] += sum(r2_values) / len(r2_values)
+
+    # Calculate averages
+    for model_type, stats in model_stats.items():
+        if stats["kiekis"] > 0:
+            stats["vidutinis_uzpildymas"] /= stats["kiekis"]
+            stats["vidutinis_rmse"] /= stats["kiekis"]
+            stats["vidutinis_r2"] /= stats["kiekis"]
+
+    comparison["modeliu_palyginimas"] = model_stats
+
+    # Efficiency indicators
+    comparison["efektyvumo_rodikliai"] = calculate_efficiency_indicators(results)
+
+    # Generate recommendations
+    comparison["rekomendacijos"] = generate_recommendations(model_stats, results)
+
+    return comparison
+
+def calculate_efficiency_indicators(results):
+    """Calculate efficiency indicators for comparison"""
+    indicators = {
+        "geriausias_uzpildymas": None,
+        "geriausias_rmse": None,
+        "geriausias_r2": None,
+        "greičiausias": None
+    }
+
+    best_filling = max(results, key=lambda r: r['originalus_trukstamu_kiekis'] - r['imputuotas_trukstamu_kiekis'])
+    indicators["geriausias_uzpildymas"] = {
+        "rezultato_id": best_filling['rezultato_id'],
+        "modelis": best_filling['modelio_tipas'],
+        "uzpildyta": best_filling['originalus_trukstamu_kiekis'] - best_filling['imputuotas_trukstamu_kiekis']
+    }
+
+    return indicators
+
+def generate_recommendations(model_stats, results):
+    """Generate recommendations based on comparison"""
+    recommendations = []
+
+    if len(model_stats) >= 2:
+        rf_stats = model_stats.get('random_forest', {})
+        xgb_stats = model_stats.get('xgboost', {})
+
+        if rf_stats and xgb_stats:
+            if rf_stats.get('vidutinis_r2', 0) > xgb_stats.get('vidutinis_r2', 0):
+                recommendations.append({
+                    "tipas": "modelio_pasirinkimas",
+                    "tekstas": "Random Forest modelis rodo geresnį R² rezultatą ir yra rekomenduojamas tikslumui.",
+                    "prioritetas": "aukštas"
+                })
+            else:
+                recommendations.append({
+                    "tipas": "modelio_pasirinkimas",
+                    "tekstas": "XGBoost modelis rodo geresnį R² rezultatą ir yra rekomenduojamas tikslumui.",
+                    "prioritetas": "aukštas"
+                })
+
+    if len(results) > 3:
+        recommendations.append({
+            "tipas": "duomenu_kokybe",
+            "tekstas": "Rekomenduojama patikrinti duomenų kokybę - atlikta daug bandymų.",
+            "prioritetas": "vidutinis"
+        })
+
+    return recommendations
 
 @app.route('/api/komentarai', methods=['GET'])
 def get_komentarai():
