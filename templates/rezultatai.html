@@ -524,9 +524,10 @@
                     const data = await response.json();
 
                     if (response.ok) {
-                        // Store comparison data and navigate to comparison page
-                        sessionStorage.setItem('comparisonData', JSON.stringify(data));
-                        window.location.href = '/palyginimas';
+                        // Navigate to comparison page with result IDs as URL parameters
+                        const urlParams = new URLSearchParams();
+                        selectedIds.forEach(id => urlParams.append('ids', id));
+                        window.location.href = `/palyginimas?${urlParams.toString()}`;
                     } else {
                         this.showAlert(data.error || 'Klaida vykdant palyginimą', 'danger');
                     }

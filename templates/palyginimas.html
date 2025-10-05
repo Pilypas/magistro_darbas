@@ -363,16 +363,37 @@
                 this.loadComparisonData();
             }
 
-            loadComparisonData() {
+            async loadComparisonData() {
                 try {
-                    const data = sessionStorage.getItem('comparisonData');
-                    if (!data) {
+                    // Get result IDs from URL parameters
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const resultIds = urlParams.getAll('ids');
+
+                    if (resultIds.length < 2) {
                         this.showError();
                         return;
                     }
 
-                    this.comparisonData = JSON.parse(data);
-                    this.renderComparison();
+                    // Fetch comparison data from API
+                    const response = await fetch('/api/palyginimas', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            result_ids: resultIds
+                        })
+                    });
+
+                    const data = await response.json();
+
+                    if (response.ok) {
+                        this.comparisonData = data;
+                        this.renderComparison();
+                    } else {
+                        console.error('API Error:', data.error);
+                        this.showError();
+                    }
                 } catch (error) {
                     console.error('Error loading comparison data:', error);
                     this.showError();

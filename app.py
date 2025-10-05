@@ -295,14 +295,14 @@ def compare_results():
         if len(rezultatai) != len(result_ids):
             return jsonify({"error": "Kai kurie rezultatai nerasti"}), 404
 
-        # Parse JSON fields for each result
+        # Parse JSON fields for each result (skip heavy graphics data for comparison)
         for rezultatas in rezultatai:
             if rezultatas['modelio_metrikos']:
                 rezultatas['modelio_metrikos'] = json_module.loads(rezultatas['modelio_metrikos'])
             if rezultatas['pozymiu_svarba']:
                 rezultatas['pozymiu_svarba'] = json_module.loads(rezultatas['pozymiu_svarba'])
-            if rezultatas['grafikai']:
-                rezultatas['grafikai'] = json_module.loads(rezultatas['grafikai'])
+            # Skip graphics for comparison to reduce data size
+            rezultatas['grafikai'] = None
 
         # Generate comparison data
         comparison_data = generate_comparison_data(rezultatai)
