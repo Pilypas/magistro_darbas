@@ -634,16 +634,36 @@ def impute_missing_values(filename):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@app.route('/download/<filename>')
+@app.route('/download/<path:filename>')
 def download_file(filename):
     try:
-        filepath = os.path.join(UPLOAD_FOLDER, secure_filename(filename))
+        # Use secure_filename but preserve the structure
+        secure_name = secure_filename(filename)
+        filepath = os.path.join(UPLOAD_FOLDER, secure_name)
+
+        # Debug: print what we're looking for
+        print(f"Looking for file: {filepath}")
+        print(f"Original filename: {filename}")
+        print(f"Secure filename: {secure_name}")
+
         if not os.path.exists(filepath):
-            return jsonify({"error": "Failas nerastas"}), 404
-        
+            # Try without secure_filename in case it's mangling the name
+            direct_path = os.path.join(UPLOAD_FOLDER, filename)
+            print(f"Trying direct path: {direct_path}")
+
+            if os.path.exists(direct_path):
+                filepath = direct_path
+            else:
+                # List all files in upload folder for debugging
+                import glob
+                all_files = glob.glob(os.path.join(UPLOAD_FOLDER, "*"))
+                print(f"Available files: {[os.path.basename(f) for f in all_files]}")
+                return jsonify({"error": f"Failas nerastas: {filename}"}), 404
+
         return send_file(filepath, as_attachment=True)
-    
+
     except Exception as e:
+        print(f"Download error: {e}")
         return jsonify({"error": str(e)}), 500
 
 def generate_model_performance_plots(model_metrics):
