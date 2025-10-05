@@ -24,6 +24,26 @@ from mysql.connector import Error
 from datetime import datetime
 import uuid
 import json as json_module
+from pathlib import Path
+
+# Load .env file for local development
+def load_env():
+    """Load environment variables from .env file"""
+    env_path = Path('.') / '.env'
+    if env_path.exists():
+        print("Loading environment variables from .env file...")
+        with open(env_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#') and '=' in line:
+                    key, value = line.split('=', 1)
+                    os.environ[key] = value
+                    print(f"Loaded: {key}")
+    else:
+        print("No .env file found, using system environment variables")
+
+# Load environment variables at startup
+load_env()
 
 app = Flask(__name__)
 CORS(app)
