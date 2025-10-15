@@ -652,9 +652,29 @@ def analyze_data(filename):
                 "complete_rows": len(df.dropna()),
                 "missing_percentage": round(df.isnull().sum().sum() / (len(df) * len(df.columns)) * 100, 2)
             },
-            "missing_by_column": missing_by_column
+            "missing_by_column": missing_by_column,
+            "columns": df.columns.tolist()
         })
-    
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/get_csv_data/<filename>')
+def get_csv_data(filename):
+    """Get CSV data as JSON for map visualization"""
+    try:
+        filepath = os.path.join(UPLOAD_FOLDER, secure_filename(filename))
+        if not os.path.exists(filepath):
+            return jsonify({"error": "Failas nerastas"}), 404
+
+        df = pd.read_csv(filepath)
+
+        # Convert DataFrame to list of dictionaries
+        # Replace NaN values with None for JSON serialization
+        data = df.replace({np.nan: None}).to_dict('records')
+
+        return jsonify(data)
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

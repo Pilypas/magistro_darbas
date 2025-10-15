@@ -10,6 +10,18 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error, accuracy_score, r2_score, mean_absolute_percentage_error
 from sklearn.preprocessing import LabelEncoder
 
+# --- (nebūtina, bet rekomenduojama programos starte – už klasės ribų) ---
+# import os, random
+# os.environ["PYTHONHASHSEED"] = "0"   # <<< CHANGED (stabilus built-in hash)
+# os.environ["OMP_NUM_THREADS"] = "1"  # <<< CHANGED (deterministiškiau)
+# os.environ["MKL_NUM_THREADS"] = "1"
+# os.environ["NUMEXPR_NUM_THREADS"] = "1"
+# random.seed(42)
+# np.random.seed(42)
+# -------------------------------------------------------------------------
+
+import hashlib, struct  # <<< CHANGED (naudojam deterministinį hash)
+
 class RandomForestImputer:
     """
     Random Forest modelio klasė trūkstamų reikšmių užpildymui
@@ -18,13 +30,6 @@ class RandomForestImputer:
     def __init__(self, n_estimators=100, random_state=42):
         """
         Inicijuoja Random Forest imputavimo modelį
-        
-        Parameters:
-        -----------
-        n_estimators : int
-            Medžių skaičius miškai
-        random_state : int
-            Atsitiktinumo kontrolės parametras
         """
         self.n_estimators = n_estimators
         self.random_state = random_state
@@ -33,6 +38,11 @@ class RandomForestImputer:
         self.label_encoders = {}
         self.encoded_columns = set()
         self.model_metrics = {}
+
+    # --- deterministinis seed'as pagal stulpelio pavadinimą ---
+    def _stable_seed(self, text: str) -> int:  # <<< CHANGED
+        """Grąžina stabilų [0..999] poslinkį iš SHA-256(text)."""
+        return struct.unpack("<I", hashlib.sha256(text.encode("utf-8")).digest()[:4])[0] % 1000  # <<< CHANGED
         
     def _encode_categorical_features(self, df):
         """Koduoja kategorinio tipo požymius Random Forest modeliui"""
@@ -58,36 +68,22 @@ class RandomForestImputer:
     
     def _create_model(self, is_categorical=False):
         """Sukuria Random Forest modelį pagal duomenų tipą"""
+        common_kwargs = dict(  # <<< CHANGED (viena vieta bendriems parametrams)
+            n_estimators=self.n_estimators,
+            random_state=self.random_state,
+            min_samples_split=5,
+            min_samples_leaf=2,
+            max_features='sqrt',
+            n_jobs=1,  # <<< CHANGED (stabiliau nei paralelė)
+        )
         if is_categorical:
-            return RandomForestClassifier(
-                n_estimators=self.n_estimators, 
-                random_state=self.random_state,
-                min_samples_split=5,
-                min_samples_leaf=2,
-                max_features='sqrt'
-            )
+            return RandomForestClassifier(**common_kwargs)
         else:
-            return RandomForestRegressor(
-                n_estimators=self.n_estimators, 
-                random_state=self.random_state,
-                min_samples_split=5,
-                min_samples_leaf=2,
-                max_features='sqrt'
-            )
+            return RandomForestRegressor(**common_kwargs)
     
     def fit_and_impute(self, df):
         """
         Apmoko Random Forest modelius ir užpildo trūkstamas reikšmes
-        
-        Parameters:
-        -----------
-        df : pandas.DataFrame
-            Duomenų rinkinys su trūkstamomis reikšmėmis
-            
-        Returns:
-        --------
-        pandas.DataFrame
-            Duomenų rinkinys su užpildytomis reikšmėmis
         """
         # Koduojame kategorinio tipo požymius
         df_encoded = self._encode_categorical_features(df)
@@ -148,7 +144,10 @@ class RandomForestImputer:
         # Užpildome trūkstamas reikšmes požymiuose
         for feature_col in X_train.columns:
             if X_train[feature_col].isna().any():
-                fill_val = X_train[feature_col].mean() if X_train[feature_col].dtype in ['float64', 'int64'] else X_train[feature_col].mode().iloc[0] if not X_train[feature_col].mode().empty else 0
+                if X_train[feature_col].dtype in ['float64', 'int64']:
+                    fill_val = X_train[feature_col].mean()
+                else:
+                    fill_val = X_train[feature_col].mode().iloc[0] if not X_train[feature_col].mode().empty else 0
                 X_train[feature_col].fillna(fill_val, inplace=True)
         
         # Sukuriame ir apmokome modelį
@@ -157,7 +156,9 @@ class RandomForestImputer:
         
         # Vertinimo duomenų padalijimas
         if len(y_train) > 10:
-            eval_random_state = self.random_state + hash('random_forest') % 1000
+            # --- stabilus, bet skirtingas kiekvienam stulpeliui poslinkis ---
+            eval_random_state = self.random_state + self._stable_seed(col)  # <<< CHANGED
+
             X_train_eval, X_test_eval, y_train_eval, y_test_eval = train_test_split(
                 X_train, y_train, test_size=0.2, random_state=eval_random_state
             )
@@ -213,7 +214,10 @@ class RandomForestImputer:
             # Užpildome trūkstamas reikšmes požymiuose
             for feature_col in X_missing.columns:
                 if X_missing[feature_col].isna().any():
-                    fill_val = X_train[feature_col].mean() if X_train[feature_col].dtype in ['float64', 'int64'] else X_train[feature_col].mode().iloc[0] if not X_train[feature_col].mode().empty else 0
+                    if X_train[feature_col].dtype in ['float64', 'int64']:
+                        fill_val = X_train[feature_col].mean()
+                    else:
+                        fill_val = X_train[feature_col].mode().iloc[0] if not X_train[feature_col].mode().empty else 0
                     X_missing[feature_col].fillna(fill_val, inplace=True)
             
             # Prognozuojame
@@ -232,3 +236,72 @@ class RandomForestImputer:
     def get_model_metrics(self):
         """Grąžina modelio metrikas"""
         return self.model_metrics
+
+    def get_test_predictions(self, df):
+        """
+        Grąžina test predictions kiekvienam modeliui vizualizacijai.
+
+        Args:
+            df: Originalus DataFrame (be imputacijos)
+
+        Returns:
+            dict: Dictionary su rodikliais ir jų predictions
+                  {rodiklis: {'y_test': array, 'y_pred': array, 'r2': float}}
+        """
+        predictions_data = {}
+
+        # Encode'iname duomenis taip pat kaip ir mokyme
+        df_encoded = self._encode_categorical_features(df.copy())
+
+        # Konvertuojame į skaičius
+        for col in df_encoded.columns:
+            if df_encoded[col].dtype == 'object':
+                try:
+                    df_encoded[col] = pd.to_numeric(df_encoded[col], errors='coerce')
+                except:
+                    pass
+
+        # Iteruojame per numeric stulpelius
+        numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+
+        for col in numeric_cols:
+            if col in self.models and col in self.model_metrics:
+                metrics = self.model_metrics[col]
+                if metrics.get('model_type') == 'regression' and metrics.get('sample_size', 0) > 10:
+                    try:
+                        # Paruošiame duomenis
+                        mask_not_missing = df_encoded[col].notna()
+                        feature_cols = [c for c in df_encoded.columns if c != col]
+
+                        X = df_encoded.loc[mask_not_missing, feature_cols].copy()
+                        y = df_encoded.loc[mask_not_missing, col].copy()
+
+                        # Užpildome trūkstamas reikšmes požymiuose
+                        for feature_col in X.columns:
+                            if X[feature_col].isna().any():
+                                X[feature_col].fillna(X[feature_col].mean(), inplace=True)
+
+                        # Train/test split su tuo pačiu random_state kaip ir mokyme
+                        eval_random_state = self.random_state + self._stable_seed(col)
+                        X_train, X_test, y_train, y_test = train_test_split(
+                            X, y, test_size=0.2, random_state=eval_random_state
+                        )
+
+                        # Prognozuojame
+                        y_pred = self.models[col].predict(X_test)
+
+                        # SVARBU: Naudojame metrikas iš model_metrics (išsaugotas mokant modelį)
+                        # Taip išvengiame skirtumų tarp metrikų analizės ir scatter plot
+                        # Atgalinio suderinamumo dėlei - jei metrikos neegzistuoja, naudojame default
+                        predictions_data[col] = {
+                            'y_test': y_test.values,
+                            'y_pred': y_pred,
+                            'r2': metrics.get('r2', r2_score(y_test, y_pred)),       # Išsaugota arba apskaičiuota
+                            'mae': metrics.get('mae', np.mean(np.abs(y_test - y_pred))),   # Išsaugota arba apskaičiuota
+                            'rmse': metrics.get('rmse', np.sqrt(np.mean((y_test - y_pred)**2)))  # Išsaugota arba apskaičiuota
+                        }
+                    except Exception as e:
+                        print(f"Klaida apdorojant {col}: {e}")
+                        continue
+
+        return predictions_data
