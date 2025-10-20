@@ -1,21 +1,7 @@
 {
   "permissions": {
     "allow": [
-      "WebFetch(domain:www.zurnalai.vu.lt)",
-      "Bash(py -m pip install:*)",
-      "Bash(dir)",
-      "Bash(dir:*)",
-      "Bash(pip install:*)",
-      "Bash(python:*)",
-      "WebFetch(domain:eurostat.github.io)",
-      "WebFetch(domain:github.com)",
-      "Bash(del add_final_cells.py)",
-      "Bash(findstr:*)",
-      "Bash(for i in {1..5})",
-      "Bash(do python -c \"print(''Paleidimas $i: hash(\"\"random_forest\"\") % 1000 ='', hash(''random_forest'') % 1000)\")",
-      "Bash(done)",
-      "Bash(del add_xgboost_section.py)",
-      "Bash(cat:*)"
+      "WebSearch"
     ],
     "deny": [],
     "ask": []

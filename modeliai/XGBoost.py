@@ -1,297 +1,295 @@
 """
-XGBoost modelio implementacija trūkstamų reikšmių užpildymui
+XGBoost modelio implementacija ekonominių rodiklių trūkstamų reikšmių užpildymui
+===============================================================================
+
 Magistro darbas - 2025
+
+PAGRINDINĖS TAISYKLĖS
+---------------------
+• Kategoriniai prediktoriai 'geo' ir 'time_period' laikomi BE trūkumų:
+  - jų NEimputuojame,
+  - juos tik ordinaliai enkoduojame (fit tik ant TRAIN vertinimo metu).
+• Kiti ekonominiai rodikliai gali turėti NA ir yra naudojami kaip prediktoriai.
+• Synthetic test (be leakage):
+  - iš žinomų taikinių eilučių atsitiktinai parenkama 20% TEST,
+  - skaitinių prediktorių imputeris fit’inamas tik ant TRAIN, tada transformuojami TRAIN ir TEST,
+  - kategoriniai ('geo', 'time_period') enkoduojami tik pagal TRAIN žodyną,
+  - modelis mokomas tik ant TRAIN, prognozuoja TEST, skaičiuojamos metrikos.
+• Po vertinimo modelis pertreniruojamas ant 100% žinomų taikinių realiai imputacijai.
 """
 
-import pandas as pd
 import numpy as np
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import mean_squared_error, accuracy_score, r2_score, mean_absolute_percentage_error
-from sklearn.preprocessing import LabelEncoder
+import pandas as pd
+
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import OrdinalEncoder
+from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_percentage_error
 
 try:
     import xgboost as xgb
-    XGBOOST_AVAILABLE = True
-except ImportError:
-    XGBOOST_AVAILABLE = False
+except ImportError as e:
+    raise ImportError(
+        "XGBoost biblioteka neįdiegta. Įdiekite: pip install xgboost"
+    ) from e
 
-import hashlib, struct  # <<< CHANGED (deterministinis hash)
 
 class XGBoostImputer:
     """
-    XGBoost modelio klasė trūkstamų reikšmių užpildymui
+    XGBoost imputavimas ekonominiams rodikliams.
+
+    • Tikslai su trūkstamomis reikšmėmis: kiekvienam stulpeliui treniruojamas atskiras XGBRegressor.
+    • Prediktoriai: kiti rodikliai + kategoriniai 'geo', 'time_period' (be trūkumų, neimputuojami).
+    • Synthetic test be leakage (20% TEST, transformacijos fit tik ant TRAIN).
+    • Po vertinimo: pertreniruojama ant 100% žinomų taikinių realiai imputacijai.
+
+    Išsaugoma:
+        models[target] = {
+            'model', 'num_cols', 'cat_cols', 'num_imputer', 'encoder'
+        }
+        feature_importance[target] = {feature: importance}
+        model_metrics[target] = {rmse, r2, mae, mape, model_type, sample_size}
+        test_predictions[target] = {'y_test','y_pred','r2','mae','rmse'}
     """
-    
-    def __init__(self, n_estimators=100, random_state=42):
-        """
-        Inicijuoja XGBoost imputavimo modelį
-        """
-        if not XGBOOST_AVAILABLE:
-            raise ImportError("XGBoost biblioteka neįdiegta. Įdiekite su: pip install xgboost")
-            
+
+    def __init__(
+        self,
+        n_estimators=200,
+        random_state=42,
+        learning_rate=0.1,
+        max_depth=6,
+        subsample=0.8,
+        colsample_bytree=0.8,
+        min_child_weight=3,
+        reg_alpha=0.1,
+        reg_lambda=0.1,
+        categorical_cols=None
+    ):
         self.n_estimators = n_estimators
         self.random_state = random_state
+        self.learning_rate = learning_rate
+        self.max_depth = max_depth
+        self.subsample = subsample
+        self.colsample_bytree = colsample_bytree
+        self.min_child_weight = min_child_weight
+        self.reg_alpha = reg_alpha
+        self.reg_lambda = reg_lambda
+
+        # Kategoriniai prediktoriai be trūkumų (niekada neimputuojami)
+        self.categorical_cols = categorical_cols if categorical_cols else ['geo', 'time_period']
+
         self.models = {}
         self.feature_importance = {}
-        self.label_encoders = {}
-        self.encoded_columns = set()
         self.model_metrics = {}
-    
-    # --- Deterministinis sėklos poslinkis pagal stulpelio pavadinimą ---
-    def _stable_seed(self, text: str) -> int:  # <<< CHANGED
-        """Grąžina stabilų [0..999] poslinkį iš SHA-256(text)."""
-        return struct.unpack("<I", hashlib.sha256(text.encode("utf-8")).digest()[:4])[0] % 1000
-    
-    def _encode_categorical_features(self, df):
-        """Koduoja kategorinio tipo požymius XGBoost modeliui"""
-        df_encoded = df.copy()
-        
-        for col in df.columns:
-            if df[col].dtype == 'object':
-                if col not in self.label_encoders:
-                    self.label_encoders[col] = LabelEncoder()
-                    non_null_values = df_encoded[col].dropna()
-                    if len(non_null_values) > 0:
-                        self.label_encoders[col].fit(non_null_values)
-                        self.encoded_columns.add(col)
-                
-                if col in self.encoded_columns:
-                    non_null_mask = df_encoded[col].notna()
-                    if non_null_mask.sum() > 0:
-                        df_encoded.loc[non_null_mask, col] = self.label_encoders[col].transform(
-                            df_encoded.loc[non_null_mask, col]
-                        )
-        
-        return df_encoded
-    
-    def _create_model(self, is_categorical=False):
-        """Sukuria XGBoost modelį pagal duomenų tipą"""
-        common_params = dict(
+        self.test_predictions = {}
+
+    # --------- Pagalbinės ---------
+
+    def _split_train_test_indices(self, indices, test_frac=0.2, seed=42):
+        rng = np.random.RandomState(seed)
+        n_test = max(1, int(len(indices) * test_frac))
+        test_idx = rng.choice(indices, size=n_test, replace=False)
+        test_mask = indices.isin(test_idx)
+        return (~test_mask), test_mask  # train_mask, test_mask
+
+    def _column_groups(self, X: pd.DataFrame, feature_cols):
+        # Skaitiniai = numeric dtype ir NE kategoriniai
+        num_cols = [c for c in feature_cols
+                    if pd.api.types.is_numeric_dtype(X[c]) and c not in self.categorical_cols]
+        # Kategoriniai = būtent nurodyti 'geo'/'time_period', jei yra kadre
+        cat_cols = [c for c in self.categorical_cols if c in feature_cols]
+        return num_cols, cat_cols
+
+    def _create_model(self):
+        return xgb.XGBRegressor(
             n_estimators=self.n_estimators,
             random_state=self.random_state,
-            learning_rate=0.1,
-            max_depth=6,
-            subsample=0.8,
-            colsample_bytree=0.8,
-            min_child_weight=3,
-            reg_alpha=0.1,
-            reg_lambda=0.1,
+            learning_rate=self.learning_rate,
+            max_depth=self.max_depth,
+            subsample=self.subsample,
+            colsample_bytree=self.colsample_bytree,
+            min_child_weight=self.min_child_weight,
+            reg_alpha=self.reg_alpha,
+            reg_lambda=self.reg_lambda,
             verbosity=0,
-            n_jobs=1  # <<< CHANGED: deterministiškesnis elgesys
+            n_jobs=1,
+            eval_metric='rmse'
         )
-        
-        if is_categorical:
-            return xgb.XGBClassifier(**common_params, eval_metric='logloss')
-        else:
-            return xgb.XGBRegressor(**common_params, eval_metric='rmse')
-    
-    def fit_and_impute(self, df):
-        """Apmoko XGBoost modelius ir užpildo trūkstamas reikšmes"""
-        df_encoded = self._encode_categorical_features(df)
-        
-        # Konvertuojame į skaičius
-        for col in df_encoded.columns:
-            if df_encoded[col].dtype == 'object':
-                try:
-                    df_encoded[col] = pd.to_numeric(df_encoded[col], errors='coerce')
-                except:
-                    pass
-        
-        # Imputuojame kiekvieną stulpelį su trūkstamomis reikšmėmis
-        for col in df_encoded.columns:
-            if df_encoded[col].isna().any():
-                self._impute_column(df_encoded, col)
-        
-        # Dekoduojame kategorinius požymius atgal (deterministinė iteracija)
-        df_final = df_encoded.copy()
-        for col in sorted(self.encoded_columns):  # <<< CHANGED
-            if col in df_final.columns:
-                try:
-                    valid_range = range(len(self.label_encoders[col].classes_))
-                    df_final[col] = df_final[col].round().astype(int)
-                    df_final[col] = df_final[col].clip(
-                        lower=valid_range[0], 
-                        upper=valid_range[-1]
-                    )
-                    df_final[col] = self.label_encoders[col].inverse_transform(df_final[col])
-                except Exception as e:
-                    print(f"Įspėjimas dekodavime {col}: {e}")
-                    pass
-        
-        return df_final
-    
-    def _impute_column(self, df_encoded, col):
-        """Užpildo vieną stulpelį naudojant XGBoost"""
-        feature_cols = [c for c in df_encoded.columns if c != col]
-        mask_not_missing = df_encoded[col].notna()
-        
-        if mask_not_missing.sum() < 5:
-            if col in self.encoded_columns:
-                fill_value = int(df_encoded[col].mode().iloc[0]) if not df_encoded[col].mode().empty else 0
-            else:
-                fill_value = df_encoded[col].mean()
-            df_encoded[col].fillna(fill_value, inplace=True)
+
+    # --------- Pagrindinis API ---------
+
+    def fit_and_impute(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Apmoko XGBoost modelius kiekvienam taikiniui su NA (be leakage) ir
+        grąžina DataFrame su imputuotomis reikšmėmis.
+        """
+        df_work = df.copy()
+
+        # Konvertuojame ne-kategorinius 'object' į numeric, jei įmanoma
+        for col in df_work.columns:
+            if (df_work[col].dtype == 'object') and (col not in self.categorical_cols):
+                df_work[col] = pd.to_numeric(df_work[col], errors='coerce')
+
+        # Saugumo patikra: kategoriniai prediktoriai turi būti be NA
+        for c in self.categorical_cols:
+            if c in df_work.columns and df_work[c].isna().any():
+                raise ValueError(
+                    f"Kategorinis stulpelis '{c}' turi trūkstamų reikšmių, "
+                    "pagal dizainą to neturėtų būti."
+                )
+
+        for target_col in df_work.columns:
+            if target_col in self.categorical_cols:
+                continue  # niekada neimputuojame kategorinių
+            if df_work[target_col].isna().any():
+                self._impute_column(df_work, target_col)
+
+        return df_work
+
+    def _impute_column(self, df_work: pd.DataFrame, target_col: str):
+        feature_cols = [c for c in df_work.columns if c != target_col]
+        not_missing_mask = df_work[target_col].notna()
+
+        if not_missing_mask.sum() < 5:
+            # labai mažai žinomų taikinių – fallback į vidurkį
+            fill_value = df_work[target_col].mean()
+            df_work.loc[~not_missing_mask, target_col] = fill_value
+            self.model_metrics[target_col] = {
+                'model_type': 'insufficient_data',
+                'sample_size': int(not_missing_mask.sum())
+            }
             return
-        
-        X_train = df_encoded.loc[mask_not_missing, feature_cols].copy()
-        y_train = df_encoded.loc[mask_not_missing, col].copy()
-        
-        # Užpildome trūkstamas reikšmes požymiuose
-        for feature_col in X_train.columns:
-            if X_train[feature_col].isna().any():
-                if X_train[feature_col].dtype in ['float64', 'int64']:
-                    fill_val = X_train[feature_col].mean()
-                else:
-                    fill_val = X_train[feature_col].mode().iloc[0] if not X_train[feature_col].mode().empty else 0
-                X_train[feature_col].fillna(fill_val, inplace=True)
-        
-        # Sukuriame modelį
-        is_categorical = col in self.encoded_columns
-        model = self._create_model(is_categorical)
-        
-        # Vertinimo duomenų padalijimas
-        if len(y_train) > 10:
-            # --- stabilus, bet unikalus kiekvienam stulpeliui ---
-            eval_random_state = self.random_state + self._stable_seed(col)  # <<< CHANGED
-            
-            X_train_eval, X_test_eval, y_train_eval, y_test_eval = train_test_split(
-                X_train, y_train, test_size=0.2, random_state=eval_random_state
-            )
-            model.fit(X_train_eval, y_train_eval)
-            
-            # Skaičiuojame metrikas
-            y_pred = model.predict(X_test_eval)
-            metrics = {}
-            
-            if is_categorical:
-                metrics['accuracy'] = accuracy_score(y_test_eval, np.round(y_pred))
-                metrics['model_type'] = 'classification'
-            else:
-                rmse = np.sqrt(mean_squared_error(y_test_eval, y_pred))
-                r2 = r2_score(y_test_eval, y_pred)
-                mape = 0
-                if not np.any(y_test_eval == 0):
-                    try:
-                        mape = mean_absolute_percentage_error(y_test_eval, y_pred) * 100
-                    except:
-                        mape = np.mean(np.abs((y_test_eval - y_pred) / np.where(y_test_eval != 0, y_test_eval, 1))) * 100
-                
-                metrics = {
-                    'rmse': float(rmse),
-                    'r2': float(r2),
-                    'mape': float(mape),
-                    'model_type': 'regression',
-                    'mae': float(np.mean(np.abs(y_test_eval - y_pred))),
-                    'sample_size': len(y_test_eval)
-                }
-            
-            self.model_metrics[col] = metrics
-            model.fit(X_train, y_train)
+
+        # --- Visi žinomi (vertinimui) ---
+        X_all_raw = df_work.loc[not_missing_mask, feature_cols].copy()
+        y_all = df_work.loc[not_missing_mask, target_col].copy()
+
+        # Synthetic test indeksai
+        train_mask, test_mask = self._split_train_test_indices(
+            y_all.index, test_frac=0.2, seed=self.random_state
+        )
+        X_train_raw = X_all_raw.loc[train_mask].copy()
+        X_test_raw  = X_all_raw.loc[test_mask].copy()
+        y_train = y_all.loc[train_mask].copy()
+        y_test  = y_all.loc[test_mask].copy()
+
+        # Stulpelių grupės
+        num_cols, cat_cols = self._column_groups(X_all_raw, feature_cols)
+
+        # --- TRANSFORMACIJOS VERTINIMUI (fit TIK ant TRAIN) ---
+
+        # 1) Skaitiniai prediktoriai – gali turėti NA -> imputacija tik iš TRAIN
+        if num_cols:
+            num_imp_eval = SimpleImputer(strategy='mean')
+            X_train_num = num_imp_eval.fit_transform(X_train_raw[num_cols])
+            X_test_num  = num_imp_eval.transform(X_test_raw[num_cols])
         else:
-            model.fit(X_train, y_train)
-            self.model_metrics[col] = {'model_type': 'insufficient_data', 'sample_size': len(y_train)}
-        
-        self.models[col] = model
-        
-        # Požymių svarba
-        importance_dict = dict(zip(X_train.columns, [float(x) for x in model.feature_importances_]))
-        self.feature_importance[col] = importance_dict
-        
-        # Prognozuojame trūkstamas reikšmes
-        missing_mask = df_encoded[col].isna()
+            X_train_num = np.empty((len(X_train_raw), 0))
+            X_test_num  = np.empty((len(X_test_raw), 0))
+
+        # 2) Kategoriniai prediktoriai (geo, time_period) – be NA, tik kodavimas
+        if cat_cols:
+            enc_eval = OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1)
+            X_train_cat = enc_eval.fit_transform(X_train_raw[cat_cols])
+            X_test_cat  = enc_eval.transform(X_test_raw[cat_cols])
+        else:
+            X_train_cat = np.empty((len(X_train_raw), 0))
+            X_test_cat  = np.empty((len(X_test_raw), 0))
+
+        # Galutinės dizainų matricos vertinimui
+        X_train_eval = np.hstack([X_train_num, X_train_cat])
+        X_test_eval  = np.hstack([X_test_num, X_test_cat])
+
+        # --- Treniruotė ir metrikos ---
+        model_eval = self._create_model()
+        model_eval.fit(X_train_eval, y_train.values)
+
+        y_pred = model_eval.predict(X_test_eval)
+
+        rmse = float(np.sqrt(mean_squared_error(y_test, y_pred)))
+        r2   = float(r2_score(y_test, y_pred))
+        mae  = float(np.mean(np.abs(y_test.values - y_pred)))
+        if not np.any(y_test.values == 0):
+            try:
+                mape = float(mean_absolute_percentage_error(y_test, y_pred) * 100)
+            except Exception:
+                mape = float(np.mean(np.abs((y_test.values - y_pred) /
+                                            np.where(y_test.values != 0, y_test.values, 1))) * 100)
+        else:
+            mape = 0.0
+
+        self.model_metrics[target_col] = {
+            'rmse': rmse, 'r2': r2, 'mae': mae, 'mape': mape,
+            'model_type': 'synthetic_test', 'sample_size': int(len(y_test))
+        }
+        self.test_predictions[target_col] = {
+            'y_test': y_test.values, 'y_pred': y_pred,
+            'r2': r2, 'mae': mae, 'rmse': rmse
+        }
+
+        # --- PERMOKYMAS ant 100% žinomų taikinių REALIAI IMPUTACIJAI ---
+        # Transformacijos šiai fazei gali naudoti visas žinomas eilutes (čia jau ne vertinimas)
+        if num_cols:
+            num_imp_full = SimpleImputer(strategy='mean')
+            X_all_num = num_imp_full.fit_transform(X_all_raw[num_cols])
+        else:
+            num_imp_full = None
+            X_all_num = np.empty((len(X_all_raw), 0))
+
+        if cat_cols:
+            enc_full = OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1)
+            X_all_cat = enc_full.fit_transform(X_all_raw[cat_cols])
+        else:
+            enc_full = None
+            X_all_cat = np.empty((len(X_all_raw), 0))
+
+        X_all_full = np.hstack([X_all_num, X_all_cat])
+
+        model_full = self._create_model()
+        model_full.fit(X_all_full, y_all.values)
+
+        # Išsaugome, ko reikės realiai imputacijai
+        self.models[target_col] = {
+            'model': model_full,
+            'num_cols': num_cols,
+            'cat_cols': cat_cols,
+            'num_imputer': num_imp_full,
+            'encoder': enc_full
+        }
+
+        # --- REALI IMPUTACIJA: užpildome NA taikyne ---
+        missing_mask = df_work[target_col].isna()
         if missing_mask.any():
-            X_missing = df_encoded.loc[missing_mask, feature_cols].copy()
-            
-            for feature_col in X_missing.columns:
-                if X_missing[feature_col].isna().any():
-                    if X_train[feature_col].dtype in ['float64', 'int64']:
-                        fill_val = X_train[feature_col].mean()
-                    else:
-                        fill_val = X_train[feature_col].mode().iloc[0] if not X_train[feature_col].mode().empty else 0
-                    X_missing[feature_col].fillna(fill_val, inplace=True)
-            
-            predictions = model.predict(X_missing)
-            
-            if is_categorical:
-                predictions = np.round(predictions).astype(int)
+            X_missing_raw = df_work.loc[missing_mask, feature_cols].copy()
+
+            if num_cols:
+                X_missing_num = num_imp_full.transform(X_missing_raw[num_cols])
             else:
-                predictions = [float(x) for x in predictions]
-            
-            df_encoded.loc[missing_mask, col] = predictions
-    
+                X_missing_num = np.empty((len(X_missing_raw), 0))
+
+            if cat_cols:
+                X_missing_cat = enc_full.transform(X_missing_raw[cat_cols])
+            else:
+                X_missing_cat = np.empty((len(X_missing_raw), 0))
+
+            X_missing = np.hstack([X_missing_num, X_missing_cat])
+            preds = model_full.predict(X_missing)
+            df_work.loc[missing_mask, target_col] = preds
+
+        # --- Feature importance ---
+        feature_names = (num_cols or []) + (cat_cols or [])
+        importances = model_full.feature_importances_
+        k = min(len(feature_names), len(importances))
+        importance = {feature_names[i]: float(importances[i]) for i in range(k)}
+        importance = dict(sorted(importance.items(), key=lambda kv: kv[1], reverse=True))
+        self.feature_importance[target_col] = importance
+
+    # --------- Getteriai ---------
+
     def get_feature_importance(self):
-        """Grąžina požymių svarbos informaciją"""
         return self.feature_importance
-    
+
     def get_model_metrics(self):
-        """Grąžina modelio metrikas"""
         return self.model_metrics
 
-    def get_test_predictions(self, df):
-        """
-        Grąžina test predictions kiekvienam modeliui vizualizacijai.
-
-        Args:
-            df: Originalus DataFrame (be imputacijos)
-
-        Returns:
-            dict: Dictionary su rodikliais ir jų predictions
-                  {rodiklis: {'y_test': array, 'y_pred': array, 'r2': float}}
-        """
-        predictions_data = {}
-
-        # Encode'iname duomenis taip pat kaip ir mokyme
-        df_encoded = self._encode_categorical_features(df.copy())
-
-        # Konvertuojame į skaičius
-        for col in df_encoded.columns:
-            if df_encoded[col].dtype == 'object':
-                try:
-                    df_encoded[col] = pd.to_numeric(df_encoded[col], errors='coerce')
-                except:
-                    pass
-
-        # Iteruojame per numeric stulpelius
-        numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
-
-        for col in numeric_cols:
-            if col in self.models and col in self.model_metrics:
-                metrics = self.model_metrics[col]
-                if metrics.get('model_type') == 'regression' and metrics.get('sample_size', 0) > 10:
-                    try:
-                        # Paruošiame duomenis
-                        mask_not_missing = df_encoded[col].notna()
-                        feature_cols = [c for c in df_encoded.columns if c != col]
-
-                        X = df_encoded.loc[mask_not_missing, feature_cols].copy()
-                        y = df_encoded.loc[mask_not_missing, col].copy()
-
-                        # Užpildome trūkstamas reikšmes požymiuose
-                        for feature_col in X.columns:
-                            if X[feature_col].isna().any():
-                                X[feature_col].fillna(X[feature_col].mean(), inplace=True)
-
-                        # Train/test split su tuo pačiu random_state kaip ir mokyme
-                        eval_random_state = self.random_state + self._stable_seed(col)
-                        X_train, X_test, y_train, y_test = train_test_split(
-                            X, y, test_size=0.2, random_state=eval_random_state
-                        )
-
-                        # Prognozuojame
-                        y_pred = self.models[col].predict(X_test)
-
-                        # SVARBU: Naudojame metrikas iš model_metrics (išsaugotas mokant modelį)
-                        # Taip išvengiame skirtumų tarp metrikų analizės ir scatter plot
-                        # Atgalinio suderinamumo dėlei - jei metrikos neegzistuoja, naudojame default
-                        predictions_data[col] = {
-                            'y_test': y_test.values,
-                            'y_pred': y_pred,
-                            'r2': metrics.get('r2', r2_score(y_test, y_pred)),       # Išsaugota arba apskaičiuota
-                            'mae': metrics.get('mae', np.mean(np.abs(y_test - y_pred))),   # Išsaugota arba apskaičiuota
-                            'rmse': metrics.get('rmse', np.sqrt(np.mean((y_test - y_pred)**2)))  # Išsaugota arba apskaičiuota
-                        }
-                    except Exception as e:
-                        print(f"Klaida apdorojant {col}: {e}")
-                        continue
-
-        return predictions_data
+    def get_test_predictions(self, df=None):
+        return self.test_predictions

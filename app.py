@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_file, render_template_string
+from flask import Flask, request, jsonify, send_file, render_template
 from flask_cors import CORS
 import pandas as pd
 import numpy as np
@@ -131,6 +131,8 @@ def init_database_tables():
                 modelio_tipas ENUM('random_forest', 'xgboost') NOT NULL,
                 n_estimators INT NOT NULL,
                 random_state INT NOT NULL,
+                max_depth INT DEFAULT NULL,
+                learning_rate FLOAT DEFAULT NULL,
                 originalus_trukstamu_kiekis INT NOT NULL,
                 imputuotas_trukstamu_kiekis INT NOT NULL,
                 apdorotu_stulpeliu_kiekis INT NOT NULL,
@@ -141,6 +143,23 @@ def init_database_tables():
                 busena ENUM('vykdomas', 'baigtas', 'klaida') DEFAULT 'vykdomas'
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         """)
+
+        # Add max_depth and learning_rate columns if they don't exist (for existing tables)
+        try:
+            cursor.execute("""
+                ALTER TABLE imputacijos_rezultatai
+                ADD COLUMN max_depth INT DEFAULT NULL AFTER random_state
+            """)
+        except:
+            pass  # Column already exists
+
+        try:
+            cursor.execute("""
+                ALTER TABLE imputacijos_rezultatai
+                ADD COLUMN learning_rate FLOAT DEFAULT NULL AFTER max_depth
+            """)
+        except:
+            pass  # Column already exists
 
         cursor.close()
         connection.commit()
@@ -155,25 +174,52 @@ init_database_tables()
 # MLImputer wrapper klasė, kuri naudoja atskirų modelių failus
 class MLImputer:
     """Wrapper klasė, kuri pasirenka tinkamą modelį pagal model_type"""
-    
-    def __init__(self, model_type='random_forest', n_estimators=100, random_state=42):
+
+    def __init__(self, model_type='random_forest', n_estimators=100, random_state=42,
+                 max_depth=None, learning_rate=None):
         self.model_type = model_type
         self.n_estimators = n_estimators
         self.random_state = random_state
-        
+        self.max_depth = max_depth
+        self.learning_rate = learning_rate
+
         # Inicijuojame tinkamą modelį
         if model_type == 'xgboost' and XGBOOST_IMPUTER_AVAILABLE:
             try:
-                self.imputer = XGBoostImputer(n_estimators=n_estimators, random_state=random_state)
+                # XGBoost specific parameters
+                xgb_params = {
+                    'n_estimators': n_estimators,
+                    'random_state': random_state
+                }
+                if max_depth is not None:
+                    xgb_params['max_depth'] = max_depth
+                if learning_rate is not None:
+                    xgb_params['learning_rate'] = learning_rate
+
+                self.imputer = XGBoostImputer(**xgb_params)
             except Exception as e:
                 # Bet kokios klaidos - naudojame Random Forest
-                self.imputer = RandomForestImputer(n_estimators=n_estimators, random_state=random_state)
+                rf_params = {
+                    'n_estimators': n_estimators,
+                    'random_state': random_state
+                }
+                if max_depth is not None:
+                    rf_params['max_depth'] = max_depth
+                self.imputer = RandomForestImputer(**rf_params)
                 self.model_type = 'random_forest'
         else:
             # Naudojame Random Forest (arba jei XGBoost neprieinamas)
             if model_type == 'xgboost' and not XGBOOST_IMPUTER_AVAILABLE:
                 self.model_type = 'random_forest'
-            self.imputer = RandomForestImputer(n_estimators=n_estimators, random_state=random_state)
+
+            rf_params = {
+                'n_estimators': n_estimators,
+                'random_state': random_state
+            }
+            if max_depth is not None:
+                rf_params['max_depth'] = max_depth
+
+            self.imputer = RandomForestImputer(**rf_params)
     
     def fit_transform(self, df):
         """Užpildo trūkstamas reikšmes naudojant pasirinktą modelį"""
@@ -187,33 +233,37 @@ class MLImputer:
         """Grąžina modelio metrikas"""
         return self.imputer.get_model_metrics()
 
+    def get_test_predictions(self):
+        """Grąžina test predictions duomenis"""
+        return self.imputer.get_test_predictions()
+
 @app.route('/')
 def index():
-    return send_file('templates/index.html')
+    return render_template('index.html')
 
 @app.route('/imputacija')
 def imputacija():
-    return send_file('templates/imputacija.html')
+    return render_template('imputacija.html')
 
 @app.route('/apie')
 def apie():
-    return send_file('templates/apie.html')
+    return render_template('apie.html')
 
 @app.route('/komentarai')
 def komentarai():
-    return send_file('templates/komentarai.html')
+    return render_template('komentarai.html')
 
 @app.route('/rezultatai')
 def rezultatai():
-    return send_file('templates/rezultatai.html')
+    return render_template('rezultatai.html')
 
 @app.route('/rezultatai/<result_id>')
 def rezultatas_detali(result_id):
-    return send_file('templates/rezultatas_detali.html')
+    return render_template('rezultatas_detali.html')
 
 @app.route('/palyginimas')
 def palyginimas():
-    return send_file('templates/palyginimas.html')
+    return render_template('palyginimas.html')
 
 @app.route('/api/rezultatai', methods=['GET'])
 def get_rezultatai():
@@ -679,7 +729,8 @@ def get_csv_data(filename):
         return jsonify({"error": str(e)}), 500
 
 def save_imputation_result(filename, imputed_filename, model_type, n_estimators, random_state,
-                          original_missing, imputed_missing, plots, feature_importance, model_metrics):
+                          original_missing, imputed_missing, plots, feature_importance, model_metrics,
+                          max_depth=None, learning_rate=None):
     """Save imputation result to database"""
     if not MYSQL_ENABLED:
         return None
@@ -695,14 +746,15 @@ def save_imputation_result(filename, imputed_filename, model_type, n_estimators,
         cursor.execute("""
             INSERT INTO imputacijos_rezultatai (
                 rezultato_id, originalus_failas, imputuotas_failas,
-                modelio_tipas, n_estimators, random_state,
+                modelio_tipas, n_estimators, random_state, max_depth, learning_rate,
                 originalus_trukstamu_kiekis, imputuotas_trukstamu_kiekis,
                 apdorotu_stulpeliu_kiekis, modelio_metrikos,
                 pozymiu_svarba, grafikai, busena
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """, (
             result_id, filename, imputed_filename, model_type,
-            n_estimators, random_state, original_missing, imputed_missing,
+            n_estimators, random_state, max_depth, learning_rate,
+            original_missing, imputed_missing,
             len(feature_importance) if feature_importance else 0,
             json_module.dumps(model_metrics) if model_metrics else None,
             json_module.dumps(feature_importance) if feature_importance else None,
@@ -737,9 +789,17 @@ def impute_missing_values(filename):
         model_type = data.get('model_type', 'random_forest')
         n_estimators = data.get('n_estimators', 100)
         random_state = data.get('random_state', 42)
+        max_depth = data.get('max_depth', None)  # None = automatic
+        learning_rate = data.get('learning_rate', None)  # For XGBoost only
 
-        # Perform imputation
-        imputer = MLImputer(model_type=model_type, n_estimators=n_estimators, random_state=random_state)
+        # Perform imputation with all parameters
+        imputer = MLImputer(
+            model_type=model_type,
+            n_estimators=n_estimators,
+            random_state=random_state,
+            max_depth=max_depth,
+            learning_rate=learning_rate
+        )
         df_imputed = imputer.fit_transform(df)
 
         # Generate unique filename for imputed data
@@ -819,11 +879,17 @@ def impute_missing_values(filename):
         performance_plots = generate_model_performance_plots(model_metrics)
         plots.update(performance_plots)
 
+        # Generate scatter plots for actual vs predicted values
+        test_predictions = imputer.get_test_predictions()
+        scatter_plots = generate_scatter_plots(test_predictions, model_type)
+        plots.update(scatter_plots)
+
         # Save result to database
         result_id = save_imputation_result(
             filename, imputed_filename, model_type, n_estimators, random_state,
             int(original_missing), int(df_imputed.isnull().sum().sum()),
-            plots, feature_importance, model_metrics
+            plots, feature_importance, model_metrics,
+            max_depth, learning_rate
         )
 
         response_data = {
@@ -877,13 +943,86 @@ def download_file(filename):
         print(f"Download error: {e}")
         return jsonify({"error": str(e)}), 500
 
+def generate_scatter_plots(test_predictions, model_type):
+    """Generate scatter plots for actual vs predicted values"""
+    plots = {}
+
+    if not test_predictions or len(test_predictions) == 0:
+        return plots
+
+    # Determine plot color based on model type
+    plot_color = '#3498db' if model_type == 'random_forest' else '#e74c3c'
+    model_name = 'Random Forest' if model_type == 'random_forest' else 'XGBoost'
+
+    # Create grid for multiple scatter plots
+    n_indicators = len(test_predictions)
+    if n_indicators == 0:
+        return plots
+
+    # Calculate grid size
+    n_cols = min(3, n_indicators)  # Max 3 columns
+    n_rows = (n_indicators + n_cols - 1) // n_cols
+
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(n_cols * 6, n_rows * 5))
+    if n_indicators == 1:
+        axes = [axes]
+    elif n_rows == 1:
+        axes = list(axes) if n_cols > 1 else [axes]
+    else:
+        axes = axes.flatten()
+
+    for idx, (indicator, data) in enumerate(test_predictions.items()):
+        ax = axes[idx]
+
+        y_test = data['y_test']
+        y_pred = data['y_pred']
+        r2 = data['r2']
+        mae = data.get('mae', np.mean(np.abs(y_test - y_pred)))
+        rmse = data.get('rmse', np.sqrt(np.mean((y_test - y_pred)**2)))
+
+        # Scatter plot
+        ax.scatter(y_test, y_pred, alpha=0.6, edgecolors='k', s=60, color=plot_color)
+
+        # Ideal line (y = x)
+        min_val = min(y_test.min(), y_pred.min())
+        max_val = max(y_test.max(), y_pred.max())
+        ax.plot([min_val, max_val], [min_val, max_val], 'r--', lw=2, label='Ideali linija (y=x)')
+
+        # Formatting
+        ax.set_xlabel('Faktinės reikšmės', fontsize=11, fontweight='bold')
+        ax.set_ylabel('Prognozuotos reikšmės', fontsize=11, fontweight='bold')
+        ax.set_title(f'{indicator} (R² = {r2:.4f})', fontsize=12, fontweight='bold', pad=10)
+        ax.legend(loc='upper left', fontsize=9)
+        ax.grid(True, alpha=0.3, linestyle='--')
+
+        # Add metrics text
+        ax.text(0.025, 0.88, f'MAE: {mae:.2f}\nRMSE: {rmse:.2f}',
+                transform=ax.transAxes, fontsize=9, verticalalignment='top',
+                bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+
+    # Remove empty subplots
+    for idx in range(n_indicators, len(axes)):
+        fig.delaxes(axes[idx])
+
+    plt.suptitle(f'{model_name} - Faktinių ir prognozuotų reikšmių palyginimas',
+                 fontsize=16, fontweight='bold', y=0.995)
+    plt.tight_layout()
+
+    img_buffer = io.BytesIO()
+    plt.savefig(img_buffer, format='png', dpi=150, bbox_inches='tight')
+    img_buffer.seek(0)
+    plots['scatter_predictions'] = base64.b64encode(img_buffer.getvalue()).decode()
+    plt.close()
+
+    return plots
+
 def generate_model_performance_plots(model_metrics):
     """Generate comprehensive model performance visualization plots"""
     plots = {}
-    
-    # Filter only regression models with metrics
-    regression_metrics = {col: metrics for col, metrics in model_metrics.items() 
-                         if metrics.get('model_type') == 'regression' and 'rmse' in metrics}
+
+    # Filter only regression/synthetic_test models with metrics
+    regression_metrics = {col: metrics for col, metrics in model_metrics.items()
+                         if metrics.get('model_type') in ['regression', 'synthetic_test'] and 'rmse' in metrics}
     
     if not regression_metrics:
         return plots
@@ -978,7 +1117,7 @@ def generate_model_performance_plots(model_metrics):
         ax.set_xlabel('Užpildyti stulpeliai', fontsize=12)
         ax.set_ylabel('R² koeficientas', fontsize=12)
         ax.set_title('Determinacijos koeficiento (R²) palyginimas', fontsize=14, fontweight='bold')
-        ax.set_ylim(0, 1)
+        ax.set_ylim(0, 1.1)
         
         # Add value labels on bars
         for i, (bar, value) in enumerate(zip(bars, r2_values)):
