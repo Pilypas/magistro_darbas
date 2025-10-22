@@ -1,0 +1,408 @@
+{% extends "base.html" %}
+
+{% block title %}Įkelti Duomenys - Duomenų analizės sistema{% endblock %}
+
+{% block nav_imputacija %}active{% endblock %}
+
+{% block extra_css %}
+.file-card {
+    background: white;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    transition: all 0.3s ease;
+    border-left: 4px solid #007bff;
+}
+
+.file-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+}
+
+.file-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.file-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #2c3e50;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.file-icon {
+    font-size: 1.5rem;
+    color: #007bff;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 15px;
+    margin-bottom: 15px;
+}
+
+.stat-item {
+    text-align: center;
+    padding: 10px;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+.stat-value {
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: #495057;
+    display: block;
+}
+
+.stat-label {
+    font-size: 0.75rem;
+    color: #6c757d;
+    text-transform: uppercase;
+    margin-top: 5px;
+    display: block;
+}
+
+.missing-badge {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.missing-low {
+    background: #d1ecf1;
+    color: #0c5460;
+}
+
+.missing-medium {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.missing-high {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+.action-buttons {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.btn-use-file {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border: none;
+    color: white;
+    transition: all 0.3s ease;
+}
+
+.btn-use-file:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    color: white;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 80px 20px;
+    background: white;
+    border-radius: 15px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.empty-state i {
+    font-size: 5rem;
+    color: #dee2e6;
+    margin-bottom: 20px;
+}
+
+.loading-container {
+    text-align: center;
+    padding: 100px 20px;
+}
+
+.column-tags {
+    margin-top: 10px;
+}
+
+.column-tag {
+    display: inline-block;
+    background: #e7f3ff;
+    color: #0066cc;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    margin: 2px;
+}
+
+/* Dark mode support */
+[data-theme="dark"] .file-card {
+    background: var(--card-bg);
+    color: var(--text-primary);
+    border-left-color: #667eea;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+
+[data-theme="dark"] .file-card:hover {
+    box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+}
+
+[data-theme="dark"] .file-title {
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] .file-header {
+    border-bottom-color: var(--border-color);
+}
+
+[data-theme="dark"] .stat-item {
+    background: var(--bg-secondary);
+}
+
+[data-theme="dark"] .stat-value {
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] .stat-label {
+    color: var(--text-secondary);
+}
+
+[data-theme="dark"] .empty-state {
+    background: var(--card-bg);
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] .column-tag {
+    background: #2d3748;
+    color: #90cdf4;
+}
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1>
+                        <i class="fas fa-database me-2 text-primary"></i>
+                        Įkelti Duomenys
+                    </h1>
+                    <p class="text-muted">
+                        Visi įkelti CSV failai su detalią statistika
+                    </p>
+                </div>
+                <div>
+                    <a href="/imputacija" class="btn btn-primary">
+                        <i class="fas fa-upload me-2"></i>
+                        Įkelti naują failą
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading state -->
+    <div id="loadingContainer" class="loading-container">
+        <i class="fas fa-spinner fa-spin fa-3x text-primary"></i>
+        <h4 class="mt-3">Įkeliami duomenys...</h4>
+    </div>
+
+    <!-- Empty state -->
+    <div id="emptyState" class="empty-state" style="display: none;">
+        <i class="fas fa-folder-open"></i>
+        <h3>Nėra įkeltų failų</h3>
+        <p class="text-muted mb-4">
+            Pradėkite įkeldami CSV failą į sistemą
+        </p>
+        <a href="/imputacija" class="btn btn-primary btn-lg">
+            <i class="fas fa-upload me-2"></i>
+            Įkelti pirmą failą
+        </a>
+    </div>
+
+    <!-- Files container -->
+    <div id="filesContainer" style="display: none;">
+        <div class="row mb-3">
+            <div class="col-12">
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i>
+                    <strong>Rasta failų:</strong> <span id="totalFiles">0</span>
+                </div>
+            </div>
+        </div>
+        <div id="filesList"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+class FilesManager {
+    constructor() {
+        this.loadingContainer = document.getElementById('loadingContainer');
+        this.emptyState = document.getElementById('emptyState');
+        this.filesContainer = document.getElementById('filesContainer');
+        this.filesList = document.getElementById('filesList');
+        this.totalFilesEl = document.getElementById('totalFiles');
+
+        this.loadFiles();
+    }
+
+    async loadFiles() {
+        try {
+            const response = await fetch('/api/uploaded-files');
+            const data = await response.json();
+
+            this.loadingContainer.style.display = 'none';
+
+            if (data.files && data.files.length > 0) {
+                this.renderFiles(data.files);
+                this.totalFilesEl.textContent = data.total_files;
+                this.filesContainer.style.display = 'block';
+            } else {
+                this.emptyState.style.display = 'block';
+            }
+        } catch (error) {
+            console.error('Error loading files:', error);
+            this.loadingContainer.style.display = 'none';
+            this.emptyState.style.display = 'block';
+        }
+    }
+
+    renderFiles(files) {
+        let html = '';
+
+        files.forEach(file => {
+            const missingClass = file.missing_percentage >= 50 ? 'missing-high' :
+                                 file.missing_percentage >= 25 ? 'missing-medium' : 'missing-low';
+
+            const columnTags = file.column_names.slice(0, 5).map(col =>
+                `<span class="column-tag">${col}</span>`
+            ).join('');
+
+            const moreColumns = file.columns > 5 ?
+                `<span class="column-tag">+${file.columns - 5} daugiau</span>` : '';
+
+            html += `
+                <div class="file-card">
+                    <div class="file-header">
+                        <h5 class="file-title">
+                            <i class="fas fa-file-csv file-icon"></i>
+                            ${file.filename}
+                        </h5>
+                        <span class="missing-badge ${missingClass}">
+                            ${file.missing_percentage}% trūksta
+                        </span>
+                    </div>
+
+                    <div class="stats-grid">
+                        <div class="stat-item">
+                            <span class="stat-value">
+                                <i class="fas fa-table text-primary" style="font-size: 0.9rem;"></i>
+                                ${file.rows.toLocaleString()}
+                            </span>
+                            <span class="stat-label">Eilutės</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-value">
+                                <i class="fas fa-columns text-info" style="font-size: 0.9rem;"></i>
+                                ${file.columns}
+                            </span>
+                            <span class="stat-label">Stulpeliai</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-value">
+                                <i class="fas fa-question-circle text-warning" style="font-size: 0.9rem;"></i>
+                                ${file.missing_count.toLocaleString()}
+                            </span>
+                            <span class="stat-label">Trūkstamos</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-value">
+                                <i class="fas fa-hdd text-secondary" style="font-size: 0.9rem;"></i>
+                                ${file.file_size_mb} MB
+                            </span>
+                            <span class="stat-label">Dydis</span>
+                        </div>
+                        ${file.has_time_data && file.year_range ? `
+                        <div class="stat-item">
+                            <span class="stat-value">
+                                <i class="fas fa-calendar text-success" style="font-size: 0.9rem;"></i>
+                                ${file.year_range}
+                            </span>
+                            <span class="stat-label">Laikotarpis</span>
+                        </div>
+                        ` : ''}
+                        <div class="stat-item">
+                            <span class="stat-value" style="font-size: 0.9rem;">
+                                <i class="fas fa-clock text-muted" style="font-size: 0.8rem;"></i>
+                                ${this.formatDate(file.upload_date)}
+                            </span>
+                            <span class="stat-label">Įkelta</span>
+                        </div>
+                    </div>
+
+                    <div class="column-tags">
+                        <small class="text-muted"><i class="fas fa-tags me-1"></i>Stulpeliai:</small>
+                        ${columnTags}
+                        ${moreColumns}
+                    </div>
+
+                    <hr class="my-3">
+
+                    <div class="action-buttons">
+                        <button class="btn btn-use-file" onclick="useFile('${file.filename}')">
+                            <i class="fas fa-play me-2"></i>
+                            Naudoti failą
+                        </button>
+                        <a href="/download/${file.filename}" class="btn btn-success">
+                            <i class="fas fa-download me-2"></i>
+                            Atsisiųsti
+                        </a>
+                    </div>
+                </div>
+            `;
+        });
+
+        this.filesList.innerHTML = html;
+    }
+
+    formatDate(dateStr) {
+        const date = new Date(dateStr);
+        const now = new Date();
+        const diffMs = now - date;
+        const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+        if (diffDays === 0) return 'Šiandien';
+        if (diffDays === 1) return 'Vakar';
+        if (diffDays < 7) return `Prieš ${diffDays} d.`;
+
+        return date.toLocaleDateString('lt-LT');
+    }
+}
+
+function useFile(filename) {
+    // Redirect to imputacija page with file already loaded
+    window.location.href = `/imputacija?file=${encodeURIComponent(filename)}`;
+}
+
+// Initialize when page loads
+document.addEventListener('DOMContentLoaded', () => {
+    new FilesManager();
+});
+</script>
+{% endblock %}

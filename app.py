@@ -245,6 +245,101 @@ def index():
 def imputacija():
     return render_template('imputacija.html')
 
+@app.route('/ikelti-duomenys')
+def ikelti_duomenys():
+    return render_template('ikelti_duomenys.html')
+
+@app.route('/api/file-stats/<filename>')
+def get_file_stats(filename):
+    """Get statistics for a specific file"""
+    try:
+        filepath = os.path.join(UPLOAD_FOLDER, secure_filename(filename))
+        if not os.path.exists(filepath):
+            return jsonify({"error": "Failas nerastas"}), 404
+
+        df = pd.read_csv(filepath)
+
+        # Calculate missing values per column
+        missing_values = {}
+        for col in df.columns:
+            missing_values[col] = int(df[col].isnull().sum())
+
+        stats = {
+            "rows": len(df),
+            "columns": len(df.columns),
+            "missing_values": missing_values
+        }
+
+        return jsonify({
+            "stats": stats,
+            "filename": filename
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/uploaded-files')
+def get_uploaded_files():
+    """Get list of all uploaded CSV files with statistics"""
+    try:
+        files_info = []
+
+        # Get all CSV files from upload folder
+        if os.path.exists(UPLOAD_FOLDER):
+            for filename in os.listdir(UPLOAD_FOLDER):
+                if filename.endswith('.csv'):
+                    filepath = os.path.join(UPLOAD_FOLDER, filename)
+
+                    try:
+                        # Read CSV to get statistics
+                        df = pd.read_csv(filepath)
+
+                        # Calculate statistics
+                        total_cells = len(df) * len(df.columns)
+                        missing_count = df.isnull().sum().sum()
+                        missing_percentage = round((missing_count / total_cells * 100), 2) if total_cells > 0 else 0
+
+                        # Get file info
+                        file_stat = os.stat(filepath)
+                        file_size = file_stat.st_size
+                        upload_date = datetime.fromtimestamp(file_stat.st_mtime)
+
+                        # Check if file has time_period column
+                        has_time_data = 'time_period' in df.columns
+                        year_range = None
+                        if has_time_data:
+                            years = df['time_period'].dropna().unique()
+                            if len(years) > 0:
+                                year_range = f"{int(min(years))} - {int(max(years))}"
+
+                        files_info.append({
+                            'filename': filename,
+                            'rows': len(df),
+                            'columns': len(df.columns),
+                            'missing_count': int(missing_count),
+                            'missing_percentage': missing_percentage,
+                            'file_size': file_size,
+                            'file_size_mb': round(file_size / (1024 * 1024), 2),
+                            'upload_date': upload_date.strftime('%Y-%m-%d %H:%M:%S'),
+                            'has_time_data': has_time_data,
+                            'year_range': year_range,
+                            'column_names': df.columns.tolist()[:10]  # First 10 columns
+                        })
+                    except Exception as e:
+                        print(f"Error reading file {filename}: {str(e)}")
+                        continue
+
+        # Sort by upload date (newest first)
+        files_info.sort(key=lambda x: x['upload_date'], reverse=True)
+
+        return jsonify({
+            'files': files_info,
+            'total_files': len(files_info)
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/apie')
 def apie():
     return render_template('apie.html')
@@ -692,7 +787,53 @@ def analyze_data(filename):
         
         # Sort by missing percentage (highest first)
         missing_by_column.sort(key=lambda x: x['missing_percentage'], reverse=True)
-        
+
+        # Analyze missing values over time (if time_period column exists)
+        missing_over_time = None
+        if 'time_period' in df.columns:
+            # Get all numeric/indicator columns (exclude geo and time_period)
+            indicator_columns = [col for col in df.columns
+                               if col not in ['geo', 'time_period']
+                               and df[col].dtype in ['float64', 'int64', 'float32', 'int32']]
+
+            # Get unique years
+            years = sorted(df['time_period'].dropna().unique().tolist())
+
+            missing_over_time = {
+                'years': years,
+                'indicators': {},
+                'total_by_year': {}
+            }
+
+            for year in years:
+                year_data = df[df['time_period'] == year]
+                total_missing = 0
+
+                for indicator in indicator_columns:
+                    if indicator not in missing_over_time['indicators']:
+                        missing_over_time['indicators'][indicator] = []
+
+                    missing_count = year_data[indicator].isnull().sum()
+                    total_count = len(year_data)
+                    missing_percentage = (missing_count / total_count * 100) if total_count > 0 else 0
+
+                    missing_over_time['indicators'][indicator].append({
+                        'year': year,
+                        'missing_count': int(missing_count),
+                        'total_count': int(total_count),
+                        'missing_percentage': round(missing_percentage, 2)
+                    })
+
+                    total_missing += missing_count
+
+                # Calculate total missing percentage for this year
+                total_cells = len(year_data) * len(indicator_columns)
+                missing_over_time['total_by_year'][year] = {
+                    'missing_count': int(total_missing),
+                    'total_cells': int(total_cells),
+                    'missing_percentage': round((total_missing / total_cells * 100) if total_cells > 0 else 0, 2)
+                }
+
         return jsonify({
             "plots": plots,
             "summary_stats": summary_stats,
@@ -703,7 +844,8 @@ def analyze_data(filename):
                 "missing_percentage": round(df.isnull().sum().sum() / (len(df) * len(df.columns)) * 100, 2)
             },
             "missing_by_column": missing_by_column,
-            "columns": df.columns.tolist()
+            "columns": df.columns.tolist(),
+            "missing_over_time": missing_over_time
         })
 
     except Exception as e:
