@@ -210,6 +210,113 @@
             background: var(--card-bg);
             color: var(--text-secondary);
         }
+
+        /* Comments Section */
+        .comment-form-container {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        .comment-item {
+            background: #ffffff;
+            border-left: 4px solid #007bff;
+            padding: 15px 20px;
+            margin-bottom: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            transition: all 0.3s ease;
+        }
+
+        .comment-item:hover {
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            transform: translateX(3px);
+        }
+
+        .comment-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .comment-author {
+            font-weight: 600;
+            color: #2c3e50;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .comment-author i {
+            color: #007bff;
+        }
+
+        .comment-date {
+            font-size: 0.85rem;
+            color: #6c757d;
+        }
+
+        .comment-text {
+            color: #495057;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .empty-comments {
+            text-align: center;
+            padding: 40px 20px;
+        }
+
+        #charCount {
+            font-weight: 600;
+            color: #007bff;
+        }
+
+        /* Dark mode for comments */
+        [data-theme="dark"] .comment-form-container {
+            background: var(--bg-secondary);
+        }
+
+        [data-theme="dark"] .comment-item {
+            background: var(--card-bg);
+            border-left-color: #667eea;
+        }
+
+        [data-theme="dark"] .comment-header {
+            border-bottom-color: var(--border-color);
+        }
+
+        [data-theme="dark"] .comment-author {
+            color: var(--text-primary);
+        }
+
+        [data-theme="dark"] .comment-author i {
+            color: #667eea;
+        }
+
+        [data-theme="dark"] .comment-date {
+            color: var(--text-secondary);
+        }
+
+        [data-theme="dark"] .comment-text {
+            color: var(--text-primary);
+        }
+
+        [data-theme="dark"] #commentName,
+        [data-theme="dark"] #commentText {
+            background: var(--card-bg);
+            color: var(--text-primary);
+            border-color: var(--border-color);
+        }
+
+        [data-theme="dark"] #charCount {
+            color: #667eea;
+        }
 {% endblock %}
 
 {% block content %}
@@ -271,6 +378,55 @@
             <div class="detail-card" id="plotsCard" style="display: none;">
                 <h3 class="detail-title">Grafikai</h3>
                 <div id="plotsContent"></div>
+            </div>
+
+            <!-- Comments Section -->
+            <div class="detail-card" id="commentsSection">
+                <h3 class="detail-title">
+                    <i class="fas fa-comments me-2"></i>
+                    Komentarai
+                </h3>
+
+                <!-- Comment Form -->
+                <div class="comment-form-container">
+                    <h5 class="mb-3">Pridėti komentarą</h5>
+                    <form id="commentForm">
+                        <div class="mb-3">
+                            <label for="commentName" class="form-label">Vardas <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="commentName" placeholder="Įveskite savo vardą" required maxlength="100">
+                        </div>
+                        <div class="mb-3">
+                            <label for="commentText" class="form-label">Komentaras <span class="text-danger">*</span></label>
+                            <textarea class="form-control" id="commentText" rows="4" placeholder="Parašykite savo komentarą..." required maxlength="1000"></textarea>
+                            <div class="form-text">Liko simbolių: <span id="charCount">1000</span></div>
+                        </div>
+                        <button type="submit" class="btn btn-primary" id="submitCommentBtn">
+                            <i class="fas fa-paper-plane me-2"></i>
+                            Paskelbti komentarą
+                        </button>
+                    </form>
+                </div>
+
+                <hr class="my-4">
+
+                <!-- Comments List -->
+                <div id="commentsListContainer">
+                    <h5 class="mb-3">Visi komentarai (<span id="commentsCount">0</span>)</h5>
+
+                    <!-- Loading -->
+                    <div id="commentsLoading" class="text-center py-3">
+                        <i class="fas fa-spinner fa-spin"></i> Kraunami komentarai...
+                    </div>
+
+                    <!-- Empty state -->
+                    <div id="commentsEmpty" class="empty-comments" style="display: none;">
+                        <i class="fas fa-comment-slash fa-3x text-muted mb-3"></i>
+                        <p class="text-muted">Kol kas komentarų nėra. Būkite pirmas!</p>
+                    </div>
+
+                    <!-- Comments list -->
+                    <div id="commentsList"></div>
+                </div>
             </div>
         </div>
     </div>
@@ -518,9 +674,200 @@ class ResultDetailManager {
             }
         }
 
+        // Comments Manager
+        class CommentsManager {
+            constructor(resultId) {
+                this.resultId = resultId;
+                this.commentForm = document.getElementById('commentForm');
+                this.commentNameInput = document.getElementById('commentName');
+                this.commentTextInput = document.getElementById('commentText');
+                this.charCountSpan = document.getElementById('charCount');
+                this.submitBtn = document.getElementById('submitCommentBtn');
+                this.commentsList = document.getElementById('commentsList');
+                this.commentsLoading = document.getElementById('commentsLoading');
+                this.commentsEmpty = document.getElementById('commentsEmpty');
+                this.commentsCount = document.getElementById('commentsCount');
+
+                this.init();
+            }
+
+            init() {
+                // Character counter
+                this.commentTextInput.addEventListener('input', () => {
+                    const remaining = 1000 - this.commentTextInput.value.length;
+                    this.charCountSpan.textContent = remaining;
+
+                    if (remaining < 100) {
+                        this.charCountSpan.style.color = '#dc3545';
+                    } else {
+                        this.charCountSpan.style.color = '';
+                    }
+                });
+
+                // Form submission
+                this.commentForm.addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    this.submitComment();
+                });
+
+                // Load comments
+                this.loadComments();
+            }
+
+            async loadComments() {
+                try {
+                    const response = await fetch(`/api/comments/${this.resultId}`);
+                    const data = await response.json();
+
+                    this.commentsLoading.style.display = 'none';
+
+                    if (data.comments && data.comments.length > 0) {
+                        this.renderComments(data.comments);
+                        this.commentsCount.textContent = data.count;
+                    } else {
+                        this.commentsEmpty.style.display = 'block';
+                        this.commentsCount.textContent = 0;
+                    }
+                } catch (error) {
+                    console.error('Error loading comments:', error);
+                    this.commentsLoading.style.display = 'none';
+                    this.commentsEmpty.style.display = 'block';
+                }
+            }
+
+            renderComments(comments) {
+                let html = '';
+
+                comments.forEach(comment => {
+                    const date = this.formatDate(comment.sukurimo_data);
+                    html += `
+                        <div class="comment-item">
+                            <div class="comment-header">
+                                <div class="comment-author">
+                                    <i class="fas fa-user-circle"></i>
+                                    ${this.escapeHtml(comment.vardas)}
+                                </div>
+                                <div class="comment-date">
+                                    <i class="far fa-clock me-1"></i>
+                                    ${date}
+                                </div>
+                            </div>
+                            <div class="comment-text">${this.escapeHtml(comment.komentaras)}</div>
+                        </div>
+                    `;
+                });
+
+                this.commentsList.innerHTML = html;
+                this.commentsEmpty.style.display = 'none';
+            }
+
+            async submitComment() {
+                const vardas = this.commentNameInput.value.trim();
+                const komentaras = this.commentTextInput.value.trim();
+
+                // Validation
+                if (vardas.length < 2) {
+                    alert('Vardas turi būti bent 2 simbolių ilgio');
+                    return;
+                }
+
+                if (komentaras.length < 5) {
+                    alert('Komentaras turi būti bent 5 simbolių ilgio');
+                    return;
+                }
+
+                // Disable button
+                this.submitBtn.disabled = true;
+                this.submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Siunčiama...';
+
+                try {
+                    const response = await fetch('/api/comments', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            result_id: this.resultId,
+                            vardas: vardas,
+                            komentaras: komentaras
+                        })
+                    });
+
+                    const data = await response.json();
+
+                    if (response.ok) {
+                        // Success
+                        this.commentNameInput.value = '';
+                        this.commentTextInput.value = '';
+                        this.charCountSpan.textContent = '1000';
+
+                        // Show success message
+                        const successAlert = document.createElement('div');
+                        successAlert.className = 'alert alert-success alert-dismissible fade show mt-3';
+                        successAlert.innerHTML = `
+                            <i class="fas fa-check-circle me-2"></i>
+                            <strong>Sėkmė!</strong> ${data.message}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        `;
+                        this.commentForm.parentElement.insertBefore(successAlert, this.commentForm.nextSibling);
+
+                        // Auto dismiss
+                        setTimeout(() => successAlert.remove(), 5000);
+
+                        // Reload comments
+                        this.commentsLoading.style.display = 'block';
+                        this.commentsList.innerHTML = '';
+                        this.loadComments();
+                    } else {
+                        alert('Klaida: ' + data.error);
+                    }
+                } catch (error) {
+                    console.error('Error submitting comment:', error);
+                    alert('Įvyko klaida siunčiant komentarą');
+                } finally {
+                    this.submitBtn.disabled = false;
+                    this.submitBtn.innerHTML = '<i class="fas fa-paper-plane me-2"></i>Paskelbti komentarą';
+                }
+            }
+
+            formatDate(dateStr) {
+                const date = new Date(dateStr);
+                const now = new Date();
+                const diffMs = now - date;
+                const diffMins = Math.floor(diffMs / 60000);
+                const diffHours = Math.floor(diffMs / 3600000);
+                const diffDays = Math.floor(diffMs / 86400000);
+
+                if (diffMins < 1) return 'Ką tik';
+                if (diffMins < 60) return `Prieš ${diffMins} min.`;
+                if (diffHours < 24) return `Prieš ${diffHours} val.`;
+                if (diffDays < 7) return `Prieš ${diffDays} d.`;
+
+                return date.toLocaleDateString('lt-LT', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+            }
+
+            escapeHtml(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+        }
+
         // Initialize when page loads
         document.addEventListener('DOMContentLoaded', () => {
-            new ResultDetailManager();
+            const manager = new ResultDetailManager();
+
+            // Initialize comments manager when result loads
+            setTimeout(() => {
+                const resultId = window.location.pathname.split('/').pop();
+                new CommentsManager(resultId);
+            }, 500);
         });
 </script>
 {% endblock %}

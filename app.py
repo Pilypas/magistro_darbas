@@ -144,6 +144,20 @@ def init_database_tables():
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         """)
 
+        # Create rezultatu_komentarai table (separate from general komentarai)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS rezultatu_komentarai (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                komentaro_id VARCHAR(36) UNIQUE NOT NULL,
+                rezultato_id VARCHAR(36) NOT NULL,
+                vardas VARCHAR(100) NOT NULL,
+                komentaras TEXT NOT NULL,
+                sukurimo_data DATETIME DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_rezultato_id (rezultato_id),
+                FOREIGN KEY (rezultato_id) REFERENCES imputacijos_rezultatai(rezultato_id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        """)
+
         # Add max_depth and learning_rate columns if they don't exist (for existing tables)
         try:
             cursor.execute("""
@@ -427,6 +441,94 @@ def get_rezultatas(result_id):
     except Error as e:
         return jsonify({"error": f"Duomenų bazės klaida: {str(e)}"}), 500
 
+@app.route('/api/comments/<result_id>', methods=['GET'])
+def get_comments(result_id):
+    """Get all comments for a specific result"""
+    if not MYSQL_ENABLED:
+        return jsonify({"comments": []}), 200  # Return empty array if DB not configured
+
+    try:
+        connection = db_manager.get_connection()
+        if not connection:
+            return jsonify({"error": "Nepavyko prisijungti prie duomenų bazės"}), 500
+
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT komentaro_id, rezultato_id, vardas, komentaras, sukurimo_data
+            FROM rezultatu_komentarai
+            WHERE rezultato_id = %s
+            ORDER BY sukurimo_data DESC
+        """, (result_id,))
+
+        comments = cursor.fetchall()
+        cursor.close()
+        connection.close()
+
+        # Format dates
+        for comment in comments:
+            if comment['sukurimo_data']:
+                comment['sukurimo_data'] = comment['sukurimo_data'].strftime('%Y-%m-%d %H:%M:%S')
+
+        return jsonify({
+            "comments": comments,
+            "count": len(comments)
+        })
+
+    except Exception as e:
+        print(f"Error fetching comments: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/comments', methods=['POST'])
+def create_comment():
+    """Create a new comment for a result"""
+    if not MYSQL_ENABLED:
+        return jsonify({"error": "Komentarų funkcija neprieinama - duomenų bazė nesukonfigūruota"}), 503
+
+    try:
+        data = request.get_json()
+        result_id = data.get('result_id')
+        vardas = data.get('vardas', '').strip()
+        komentaras = data.get('komentaras', '').strip()
+
+        # Validation
+        if not result_id:
+            return jsonify({"error": "Rezultato ID yra privalomas"}), 400
+        if not vardas or len(vardas) < 2:
+            return jsonify({"error": "Vardas turi būti bent 2 simbolių ilgio"}), 400
+        if not komentaras or len(komentaras) < 5:
+            return jsonify({"error": "Komentaras turi būti bent 5 simbolių ilgio"}), 400
+        if len(vardas) > 100:
+            return jsonify({"error": "Vardas negali būti ilgesnis nei 100 simbolių"}), 400
+        if len(komentaras) > 1000:
+            return jsonify({"error": "Komentaras negali būti ilgesnis nei 1000 simbolių"}), 400
+
+        connection = db_manager.get_connection()
+        if not connection:
+            return jsonify({"error": "Nepavyko prisijungti prie duomenų bazės"}), 500
+
+        cursor = connection.cursor()
+
+        # Insert comment into rezultatu_komentarai table
+        komentaro_id = str(uuid.uuid4())
+        cursor.execute("""
+            INSERT INTO rezultatu_komentarai (komentaro_id, rezultato_id, vardas, komentaras, sukurimo_data)
+            VALUES (%s, %s, %s, %s, NOW())
+        """, (komentaro_id, result_id, vardas, komentaras))
+
+        connection.commit()
+        cursor.close()
+        connection.close()
+
+        return jsonify({
+            "success": True,
+            "komentaro_id": komentaro_id,
+            "message": "Komentaras sėkmingai paskelbtas"
+        }), 201
+
+    except Exception as e:
+        print(f"Error creating comment: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/api/palyginimas', methods=['POST'])
 def compare_results():
     """Compare multiple imputation results"""
@@ -654,11 +756,14 @@ def add_komentaras():
         """)
 
         # Fix existing table charset if it exists
-        cursor.execute("""
-            ALTER TABLE komentarai
-            CONVERT TO CHARACTER SET utf8mb4
-            COLLATE utf8mb4_unicode_ci
-        """)
+        try:
+            cursor.execute("""
+                ALTER TABLE komentarai
+                CONVERT TO CHARACTER SET utf8mb4
+                COLLATE utf8mb4_unicode_ci
+            """)
+        except:
+            pass
 
         cursor.execute("""
             INSERT INTO komentarai (vardas, el_pastas, komentaras)
