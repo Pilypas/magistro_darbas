@@ -881,17 +881,29 @@ def analyze_data(filename):
         missing_by_column = []
         for col in df.columns:
             missing_count = df[col].isnull().sum()
+            filled_count = len(df) - missing_count
             missing_percent = round((missing_count / len(df)) * 100, 2)
-            if missing_count > 0:  # Only include columns with missing values
+
+            # Include columns with missing values OR special columns (time_period, geo)
+            if missing_count > 0 or col in ['time_period', 'geo']:
                 missing_by_column.append({
                     "column": col,
                     "missing_count": int(missing_count),
+                    "filled_count": int(filled_count),
                     "missing_percentage": missing_percent,
                     "data_type": str(df[col].dtype)
                 })
-        
-        # Sort by missing percentage (highest first)
-        missing_by_column.sort(key=lambda x: x['missing_percentage'], reverse=True)
+
+        # Sort: columns by missing percentage (highest first), then special columns (time_period, geo) at the end
+        def sort_key(item):
+            if item['column'] == 'time_period':
+                return (1, 0)  # Second to last
+            elif item['column'] == 'geo':
+                return (1, 1)  # Last
+            else:
+                return (0, -item['missing_percentage'])  # Regular columns by missing percentage descending
+
+        missing_by_column.sort(key=sort_key)
 
         # Analyze missing values over time (if time_period column exists)
         missing_over_time = None

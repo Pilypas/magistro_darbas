@@ -749,8 +749,9 @@ function displayAnalysisResults(result) {
                                 <tr>
                                     <th>Stulpelis</th>
                                     <th>Duomenų tipas</th>
-                                    <th>Trūkstamų reikšmių</th>
-                                    <th>Procentas</th>
+                                    <th>Užpildytų kiekis</th>
+                                    <th>Trūkstamų kiekis</th>
+                                    <th>Trūkstamų (%)</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -765,6 +766,7 @@ function displayAnalysisResults(result) {
                 <tr>
                     <td><strong>${item.column}</strong></td>
                     <td><span class="badge bg-secondary">${item.data_type}</span></td>
+                    <td><span class="badge bg-success">${item.filled_count.toLocaleString()}</span></td>
                     <td>${item.missing_count.toLocaleString()}</td>
                     <td>
                         <div class="progress" style="height: 20px;">
