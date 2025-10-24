@@ -25,6 +25,11 @@ from datetime import datetime
 import uuid
 import json as json_module
 from pathlib import Path
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from email.mime.base import MIMEBase
+from email import encoders
 
 # Load .env file for local development
 def load_env():
@@ -67,6 +72,24 @@ DB_CONFIG = {
     'charset': 'utf8mb4',
     'collation': 'utf8mb4_unicode_ci'
 }
+
+# Email Configuration
+EMAIL_CONFIG = {
+    'smtp_server': os.environ.get('SMTP_SERVER'),
+    'smtp_port': int(os.environ.get('SMTP_PORT', 587)),
+    'smtp_username': os.environ.get('SMTP_USERNAME'),
+    'smtp_password': os.environ.get('SMTP_PASSWORD'),
+    'from_email': os.environ.get('SMTP_FROM_EMAIL'),
+    'from_name': os.environ.get('SMTP_FROM_NAME', 'Duomenų Analizės Sistema')
+}
+
+# Check if email is configured
+EMAIL_ENABLED = all([
+    EMAIL_CONFIG['smtp_server'],
+    EMAIL_CONFIG['smtp_username'],
+    EMAIL_CONFIG['smtp_password'],
+    EMAIL_CONFIG['from_email']
+])
 
 # Check if all required MySQL environment variables are set
 MYSQL_ENABLED = all([
@@ -477,6 +500,159 @@ def get_comments(result_id):
     except Exception as e:
         print(f"Error fetching comments: {str(e)}")
         return jsonify({"error": str(e)}), 500
+
+@app.route('/api/send-result-email', methods=['POST'])
+def send_result_email():
+    """Send result details to email"""
+    if not EMAIL_ENABLED:
+        return jsonify({"error": "El. pašto siuntimas nesukonfigūruotas"}), 503
+
+    try:
+        data = request.get_json()
+        result_id = data.get('result_id')
+        recipient_email = data.get('email', '').strip()
+
+        # Validation
+        if not result_id:
+            return jsonify({"error": "Rezultato ID yra privalomas"}), 400
+        if not recipient_email:
+            return jsonify({"error": "El. pašto adresas yra privalomas"}), 400
+
+        # Basic email validation
+        if '@' not in recipient_email or '.' not in recipient_email:
+            return jsonify({"error": "Neteisingas el. pašto adresas"}), 400
+
+        # Get result from database
+        if not MYSQL_ENABLED:
+            return jsonify({"error": "Duomenų bazė nesukonfigūruota"}), 503
+
+        connection = db_manager.get_connection()
+        if not connection:
+            return jsonify({"error": "Nepavyko prisijungti prie duomenų bazės"}), 500
+
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT * FROM imputacijos_rezultatai
+            WHERE rezultato_id = %s
+        """, (result_id,))
+
+        rezultatas = cursor.fetchone()
+        cursor.close()
+        connection.close()
+
+        if not rezultatas:
+            return jsonify({"error": "Rezultatas nerastas"}), 404
+
+        # Create email
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = f"Imputacijos rezultatas: {rezultatas['originalus_failas']}"
+        msg['From'] = f"{EMAIL_CONFIG['from_name']} <{EMAIL_CONFIG['from_email']}>"
+        msg['To'] = recipient_email
+
+        # Create HTML body
+        html_body = f"""
+        <html>
+        <head>
+            <style>
+                body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+                .header {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 10px 10px 0 0; }}
+                .content {{ background: #f8f9fa; padding: 20px; border-radius: 0 0 10px 10px; }}
+                .stat {{ background: white; padding: 15px; margin: 10px 0; border-left: 4px solid #667eea; border-radius: 5px; }}
+                .stat-label {{ font-weight: bold; color: #667eea; }}
+                .stat-value {{ font-size: 1.2em; color: #2c3e50; }}
+                .footer {{ text-align: center; margin-top: 20px; color: #6c757d; font-size: 0.9em; }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h2>📊 Imputacijos Rezultatas</h2>
+                    <p>Duomenų analizės sistema</p>
+                </div>
+                <div class="content">
+                    <h3>Rezultato detalės</h3>
+
+                    <div class="stat">
+                        <div class="stat-label">Rezultato ID:</div>
+                        <div class="stat-value">{rezultatas['rezultato_id']}</div>
+                    </div>
+
+                    <div class="stat">
+                        <div class="stat-label">Originalus failas:</div>
+                        <div class="stat-value">{rezultatas['originalus_failas']}</div>
+                    </div>
+
+                    <div class="stat">
+                        <div class="stat-label">Imputuotas failas:</div>
+                        <div class="stat-value">{rezultatas['imputuotas_failas']}</div>
+                    </div>
+
+                    <div class="stat">
+                        <div class="stat-label">Modelio tipas:</div>
+                        <div class="stat-value">{'Random Forest' if rezultatas['modelio_tipas'] == 'random_forest' else 'XGBoost'}</div>
+                    </div>
+
+                    <div class="stat">
+                        <div class="stat-label">Parametrai:</div>
+                        <div class="stat-value">
+                            n_estimators: {rezultatas['n_estimators']}<br>
+                            random_state: {rezultatas['random_state']}<br>
+                            {'max_depth: ' + str(rezultatas['max_depth']) + '<br>' if rezultatas.get('max_depth') else ''}
+                            {'learning_rate: ' + str(rezultatas['learning_rate']) + '<br>' if rezultatas.get('learning_rate') else ''}
+                        </div>
+                    </div>
+
+                    <div class="stat">
+                        <div class="stat-label">Originalus trūkstamų kiekis:</div>
+                        <div class="stat-value">{rezultatas['originalus_trukstamu_kiekis']:,}</div>
+                    </div>
+
+                    <div class="stat">
+                        <div class="stat-label">Imputuotas trūkstamų kiekis:</div>
+                        <div class="stat-value">{rezultatas['imputuotas_trukstamu_kiekis']:,}</div>
+                    </div>
+
+                    <div class="stat">
+                        <div class="stat-label">Apdorotų stulpelių kiekis:</div>
+                        <div class="stat-value">{rezultatas['apdorotu_stulpeliu_kiekis']}</div>
+                    </div>
+
+                    <div class="stat">
+                        <div class="stat-label">Sukurimo data:</div>
+                        <div class="stat-value">{rezultatas['sukurimo_data'].strftime('%Y-%m-%d %H:%M:%S')}</div>
+                    </div>
+
+                    <div class="stat">
+                        <div class="stat-label">Būsena:</div>
+                        <div class="stat-value">{rezultatas['busena'].capitalize()}</div>
+                    </div>
+                </div>
+                <div class="footer">
+                    <p>Šis el. laiškas buvo sugeneruotas automatiškai.</p>
+                    <p>© {datetime.now().year} Duomenų Analizės Sistema</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+
+        msg.attach(MIMEText(html_body, 'html'))
+
+        # Send email
+        with smtplib.SMTP(EMAIL_CONFIG['smtp_server'], EMAIL_CONFIG['smtp_port']) as server:
+            server.starttls()
+            server.login(EMAIL_CONFIG['smtp_username'], EMAIL_CONFIG['smtp_password'])
+            server.send_message(msg)
+
+        return jsonify({
+            "success": True,
+            "message": f"Rezultatas sėkmingai išsiųstas į {recipient_email}"
+        }), 200
+
+    except Exception as e:
+        print(f"Error sending email: {str(e)}")
+        return jsonify({"error": f"Klaida siunčiant el. laišką: {str(e)}"}), 500
 
 @app.route('/api/comments', methods=['POST'])
 def create_comment():

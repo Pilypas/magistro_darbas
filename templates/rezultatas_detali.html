@@ -317,6 +317,27 @@
         [data-theme="dark"] #charCount {
             color: #667eea;
         }
+
+        /* Email Section */
+        .email-form {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+        }
+
+        [data-theme="dark"] .email-form {
+            background: var(--bg-secondary);
+        }
+
+        [data-theme="dark"] #recipientEmail {
+            background: var(--card-bg);
+            color: var(--text-primary);
+            border-color: var(--border-color);
+        }
+
+        #emailStatus {
+            margin-top: 15px;
+        }
 {% endblock %}
 
 {% block content %}
@@ -378,6 +399,36 @@
             <div class="detail-card" id="plotsCard" style="display: none;">
                 <h3 class="detail-title">Grafikai</h3>
                 <div id="plotsContent"></div>
+            </div>
+
+            <!-- Email Section -->
+            <div class="detail-card" id="emailSection">
+                <h3 class="detail-title">
+                    <i class="fas fa-envelope me-2"></i>
+                    Išsiųsti rezultatą el. paštu
+                </h3>
+                <p class="text-muted">Įveskite el. pašto adresą, į kurį norite gauti rezultato detales.</p>
+
+                <form id="emailForm" class="email-form">
+                    <div class="row">
+                        <div class="col-md-8">
+                            <div class="mb-3">
+                                <label for="recipientEmail" class="form-label">El. pašto adresas <span class="text-danger">*</span></label>
+                                <input type="email" class="form-control" id="recipientEmail" placeholder="pvz., vardas@example.com" required>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">&nbsp;</label>
+                            <button type="submit" class="btn btn-primary w-100" id="sendEmailBtn">
+                                <i class="fas fa-paper-plane me-2"></i>
+                                Išsiųsti
+                            </button>
+                        </div>
+                    </div>
+                </form>
+
+                <!-- Email Status Messages -->
+                <div id="emailStatus" style="display: none;"></div>
             </div>
 
             <!-- Comments Section -->
@@ -859,13 +910,97 @@ class ResultDetailManager {
             }
         }
 
+        // Email Manager
+        class EmailManager {
+            constructor(resultId) {
+                this.resultId = resultId;
+                this.emailForm = document.getElementById('emailForm');
+                this.recipientEmailInput = document.getElementById('recipientEmail');
+                this.sendEmailBtn = document.getElementById('sendEmailBtn');
+                this.emailStatus = document.getElementById('emailStatus');
+
+                this.init();
+            }
+
+            init() {
+                this.emailForm.addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    this.sendEmail();
+                });
+            }
+
+            async sendEmail() {
+                const email = this.recipientEmailInput.value.trim();
+
+                // Validation
+                if (!email) {
+                    this.showStatus('error', 'Prašome įvesti el. pašto adresą');
+                    return;
+                }
+
+                // Disable button
+                this.sendEmailBtn.disabled = true;
+                this.sendEmailBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Siunčiama...';
+
+                try {
+                    const response = await fetch('/api/send-result-email', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            result_id: this.resultId,
+                            email: email
+                        })
+                    });
+
+                    const data = await response.json();
+
+                    if (response.ok) {
+                        this.showStatus('success', data.message);
+                        this.recipientEmailInput.value = '';
+                    } else {
+                        this.showStatus('error', data.error || 'Klaida siunčiant el. laišką');
+                    }
+                } catch (error) {
+                    console.error('Error sending email:', error);
+                    this.showStatus('error', 'Įvyko klaida siunčiant el. laišką');
+                } finally {
+                    this.sendEmailBtn.disabled = false;
+                    this.sendEmailBtn.innerHTML = '<i class="fas fa-paper-plane me-2"></i>Išsiųsti';
+                }
+            }
+
+            showStatus(type, message) {
+                const alertClass = type === 'success' ? 'alert-success' : 'alert-danger';
+                const icon = type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle';
+
+                this.emailStatus.innerHTML = `
+                    <div class="alert ${alertClass} alert-dismissible fade show">
+                        <i class="fas ${icon} me-2"></i>
+                        ${message}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                `;
+                this.emailStatus.style.display = 'block';
+
+                // Auto-dismiss after 5 seconds
+                setTimeout(() => {
+                    this.emailStatus.style.display = 'none';
+                }, 5000);
+            }
+        }
+
         // Initialize when page loads
         document.addEventListener('DOMContentLoaded', () => {
             const manager = new ResultDetailManager();
+            const resultId = window.location.pathname.split('/').pop();
+
+            // Initialize email manager
+            new EmailManager(resultId);
 
             // Initialize comments manager when result loads
             setTimeout(() => {
-                const resultId = window.location.pathname.split('/').pop();
                 new CommentsManager(resultId);
             }, 500);
         });
