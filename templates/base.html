@@ -214,6 +214,226 @@
             transition: background-color 0.3s ease;
         }
 
+        /* System Monitor Widget */
+        .system-monitor {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: var(--card-bg);
+            border-radius: 12px;
+            box-shadow: 0 4px 12px var(--shadow-color);
+            z-index: 1000;
+            transition: all 0.3s ease;
+            min-width: 280px;
+            max-width: 300px;
+        }
+
+        .system-monitor.minimized {
+            width: 60px;
+            height: 60px;
+            min-width: 60px;
+            border-radius: 50%;
+        }
+
+        .system-monitor-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px 15px;
+            border-radius: 12px 12px 0 0;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            user-select: none;
+        }
+
+        .system-monitor.minimized .system-monitor-header {
+            border-radius: 50%;
+            padding: 18px;
+            justify-content: center;
+        }
+
+        .system-monitor-header h6 {
+            margin: 0;
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+
+        .system-monitor.minimized .system-monitor-header h6,
+        .system-monitor.minimized .system-monitor-body {
+            display: none;
+        }
+
+        .system-monitor-toggle {
+            background: none;
+            border: none;
+            color: white;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: transform 0.3s ease;
+        }
+
+        .system-monitor-toggle:hover {
+            transform: scale(1.1);
+        }
+
+        .system-monitor-body {
+            padding: 15px;
+        }
+
+        .stat-item {
+            margin-bottom: 12px;
+            position: relative;
+            cursor: help;
+        }
+
+        .stat-item:last-child {
+            margin-bottom: 0;
+        }
+
+        /* Tooltip styles */
+        .stat-item::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%) translateY(-8px);
+            background: rgba(0, 0, 0, 0.95);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            white-space: normal;
+            word-wrap: break-word;
+            max-width: 280px;
+            min-width: 200px;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease, transform 0.3s ease;
+            z-index: 1001;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            line-height: 1.4;
+            text-align: left;
+        }
+
+        /* Adjust tooltip position for items near screen edge */
+        .system-monitor .stat-item::after {
+            right: 0;
+            left: auto;
+            transform: translateX(0) translateY(-8px);
+        }
+
+        .stat-item::before {
+            content: '';
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%) translateY(-2px);
+            border: 6px solid transparent;
+            border-top-color: rgba(0, 0, 0, 0.95);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease, transform 0.3s ease;
+            z-index: 1001;
+        }
+
+        /* Adjust arrow position for system monitor tooltips */
+        .system-monitor .stat-item::before {
+            right: 20px;
+            left: auto;
+            transform: translateX(0) translateY(-2px);
+        }
+
+        .stat-item:hover::after,
+        .stat-item:hover::before {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+
+        .system-monitor .stat-item:hover::after {
+            opacity: 1;
+            transform: translateX(0) translateY(0);
+        }
+
+        .system-monitor .stat-item:hover::before {
+            opacity: 1;
+            transform: translateX(0) translateY(4px);
+        }
+
+        .stat-item:hover::before {
+            transform: translateX(-50%) translateY(4px);
+        }
+
+        [data-theme="dark"] .stat-item::after {
+            background: rgba(255, 255, 255, 0.95);
+            color: #000;
+        }
+
+        [data-theme="dark"] .stat-item::before {
+            border-top-color: rgba(255, 255, 255, 0.95);
+        }
+
+        .stat-label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .stat-value {
+            font-size: 0.65rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 6px;
+        }
+
+        .progress {
+            height: 8px;
+            background-color: var(--bg-secondary);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .progress-bar {
+            transition: width 0.5s ease, background-color 0.3s ease;
+        }
+
+        .progress-bar.bg-success {
+            background: linear-gradient(90deg, #28a745, #20c997);
+        }
+
+        .progress-bar.bg-warning {
+            background: linear-gradient(90deg, #ffc107, #fd7e14);
+        }
+
+        .progress-bar.bg-danger {
+            background: linear-gradient(90deg, #dc3545, #e74c3c);
+        }
+
+        /* Mobile responsiveness */
+        @media (max-width: 768px) {
+            .system-monitor {
+                bottom: 10px;
+                right: 10px;
+                min-width: 250px;
+                max-width: 250px;
+            }
+
+            .system-monitor.minimized {
+                width: 50px;
+                height: 50px;
+                min-width: 50px;
+            }
+
+            .system-monitor.minimized .system-monitor-header {
+                padding: 14px;
+            }
+        }
+
         {% block extra_css %}{% endblock %}
     </style>
 </head>
@@ -275,6 +495,56 @@
 
     <!-- Main Content -->
     {% block content %}{% endblock %}
+
+    <!-- System Monitor Widget -->
+    <div class="system-monitor" id="systemMonitor">
+        <div class="system-monitor-header" onclick="toggleSystemMonitor()">
+            <h6>
+                <i class="fas fa-server me-2"></i>
+                Sistema
+            </h6>
+            <button class="system-monitor-toggle" id="monitorToggle">
+                <i class="fas fa-chevron-down"></i>
+            </button>
+        </div>
+        <div class="system-monitor-body" id="systemMonitorBody">
+            <!-- CPU -->
+            <div class="stat-item" id="cpuStatItem" data-tooltip="...">
+                <div class="stat-label">
+                    <span><i class="fas fa-microchip me-1"></i> CPU</span>
+                    <span id="cpuPercent">--%</span>
+                </div>
+                <div class="progress">
+                    <div class="progress-bar" id="cpuBar" role="progressbar" style="width: 0%"></div>
+                </div>
+                <div class="stat-value" id="cpuInfo">-- fiz. ir -- log. branduolių</div>
+            </div>
+
+            <!-- Memory -->
+            <div class="stat-item" id="memoryStatItem" data-tooltip="...">
+                <div class="stat-label">
+                    <span><i class="fas fa-memory me-1"></i> RAM</span>
+                    <span id="memoryPercent">--%</span>
+                </div>
+                <div class="progress">
+                    <div class="progress-bar" id="memoryBar" role="progressbar" style="width: 0%"></div>
+                </div>
+                <div class="stat-value" id="memoryInfo">-- GB / -- GB</div>
+            </div>
+
+            <!-- Disk -->
+            <div class="stat-item" id="diskStatItem" data-tooltip="...">
+                <div class="stat-label">
+                    <span><i class="fas fa-hdd me-1"></i> Diskas</span>
+                    <span id="diskPercent">--%</span>
+                </div>
+                <div class="progress">
+                    <div class="progress-bar" id="diskBar" role="progressbar" style="width: 0%"></div>
+                </div>
+                <div class="stat-value" id="diskInfo">-- GB / -- GB</div>
+            </div>
+        </div>
+    </div>
 
     <!-- Footer -->
     <footer class="bg-dark text-light py-4 mt-5">
@@ -383,6 +653,139 @@
         // Initialize theme when DOM is ready
         document.addEventListener('DOMContentLoaded', () => {
             ThemeManager.init();
+        });
+    </script>
+
+    <!-- System Monitor Script -->
+    <script>
+        // System Monitor Manager
+        const SystemMonitor = {
+            UPDATE_INTERVAL: 3000, // 3 seconds
+            isMinimized: false,
+            updateTimer: null,
+
+            init() {
+                this.loadMinimizedState();
+                this.startUpdating();
+            },
+
+            loadMinimizedState() {
+                const saved = localStorage.getItem('system-monitor-minimized');
+                if (saved === 'true') {
+                    this.minimize();
+                }
+            },
+
+            saveMinimizedState() {
+                localStorage.setItem('system-monitor-minimized', this.isMinimized);
+            },
+
+            startUpdating() {
+                this.updateSystemStatus();
+                this.updateTimer = setInterval(() => this.updateSystemStatus(), this.UPDATE_INTERVAL);
+            },
+
+            async updateSystemStatus() {
+                try {
+                    const response = await fetch('/api/system-status');
+                    if (!response.ok) throw new Error('Failed to fetch system status');
+
+                    const data = await response.json();
+                    this.updateUI(data);
+                } catch (error) {
+                    console.error('Error fetching system status:', error);
+                }
+            },
+
+            updateUI(data) {
+                // CPU
+                const cpuText = `${data.cpu.count_physical} fiz. ir ${data.cpu.count_logical} log. branduolių`;
+                this.updateStat('cpu', data.cpu.percent, cpuText);
+                this.updateTooltip('cpuStatItem', data.cpu.model || 'Procesorius');
+
+                // Memory
+                this.updateStat('memory', data.memory.percent,
+                    `${data.memory.used} GB / ${data.memory.total} GB`);
+                this.updateTooltip('memoryStatItem', data.memory.model || 'RAM');
+
+                // Disk
+                this.updateStat('disk', data.disk.percent,
+                    `${data.disk.used} GB / ${data.disk.total} GB`);
+                this.updateTooltip('diskStatItem', data.disk.model || 'Diskas');
+            },
+
+            updateTooltip(elementId, text) {
+                const element = document.getElementById(elementId);
+                if (element) {
+                    element.setAttribute('data-tooltip', text);
+                }
+            },
+
+            updateStat(type, percent, info) {
+                const percentEl = document.getElementById(`${type}Percent`);
+                const barEl = document.getElementById(`${type}Bar`);
+                const infoEl = document.getElementById(`${type}Info`);
+
+                if (percentEl) percentEl.textContent = `${percent}%`;
+                if (infoEl) infoEl.textContent = info;
+
+                if (barEl) {
+                    barEl.style.width = `${percent}%`;
+
+                    // Update color based on usage
+                    barEl.className = 'progress-bar';
+                    if (percent < 60) {
+                        barEl.classList.add('bg-success');
+                    } else if (percent < 80) {
+                        barEl.classList.add('bg-warning');
+                    } else {
+                        barEl.classList.add('bg-danger');
+                    }
+                }
+            },
+
+            minimize() {
+                const monitor = document.getElementById('systemMonitor');
+                const toggle = document.getElementById('monitorToggle');
+
+                monitor.classList.add('minimized');
+                toggle.innerHTML = '<i class="fas fa-chart-line"></i>';
+                this.isMinimized = true;
+                this.saveMinimizedState();
+            },
+
+            maximize() {
+                const monitor = document.getElementById('systemMonitor');
+                const toggle = document.getElementById('monitorToggle');
+
+                monitor.classList.remove('minimized');
+                toggle.innerHTML = '<i class="fas fa-chevron-down"></i>';
+                this.isMinimized = false;
+                this.saveMinimizedState();
+            }
+        };
+
+        // Toggle function (called from onclick)
+        function toggleSystemMonitor() {
+            if (SystemMonitor.isMinimized) {
+                SystemMonitor.maximize();
+            } else {
+                SystemMonitor.minimize();
+            }
+        }
+
+        // Initialize system monitor when DOM is ready
+        document.addEventListener('DOMContentLoaded', () => {
+            SystemMonitor.init();
+        });
+
+        // Stop updating when page is hidden (performance optimization)
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                clearInterval(SystemMonitor.updateTimer);
+            } else {
+                SystemMonitor.startUpdating();
+            }
         });
     </script>
 

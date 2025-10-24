@@ -219,7 +219,9 @@ class XGBoostImputer:
 
         self.model_metrics[target_col] = {
             'rmse': rmse, 'r2': r2, 'mae': mae, 'mape': mape,
-            'model_type': 'synthetic_test', 'sample_size': int(len(y_test))
+            'model_type': 'synthetic_test',
+            'sample_size': int(len(y_test)),
+            'total_samples': int(len(y_all))
         }
         self.test_predictions[target_col] = {
             'y_test': y_test.values, 'y_pred': y_pred,

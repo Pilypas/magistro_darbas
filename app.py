@@ -26,6 +26,7 @@ import uuid
 import json as json_module
 from pathlib import Path
 import smtplib
+import psutil
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.utils import formatdate, make_msgid
@@ -1847,17 +1848,22 @@ def generate_model_performance_plots(model_metrics):
     fig, ax = plt.subplots(figsize=(14, max(6, len(regression_metrics) * 0.8)))
     
     # Prepare data for table
-    columns = ['Stulpelis', 'RMSE', 'R²', 'MAPE (%)', 'MAE', 'Imties dydis']
+    columns = ['Stulpelis', 'RMSE', 'R²', 'MAPE (%)', 'MAE', 'Imties dydis', 'Imtis (%)']
     table_data = []
-    
+
     for col, metrics in regression_metrics.items():
+        # Calculate sample percentage
+        sample_percent = f"{(metrics['sample_size'] / metrics['total_samples'] * 100):.1f}" \
+            if metrics.get('total_samples') and metrics.get('sample_size') else 'N/A'
+
         table_data.append([
             col,
             f"{metrics['rmse']:.4f}",
             f"{metrics['r2']:.4f}",
             f"{metrics['mape']:.2f}",
             f"{metrics['mae']:.4f}",
-            str(metrics['sample_size'])
+            str(metrics['sample_size']),
+            sample_percent
         ])
     
     # Create table
@@ -2030,6 +2036,177 @@ def generate_model_performance_plots(model_metrics):
         plt.close()
     
     return plots
+
+@app.route('/api/system-status')
+def get_system_status():
+    """Get current system CPU and RAM usage"""
+    try:
+        import platform
+
+        # CPU usage
+        cpu_percent = psutil.cpu_percent(interval=0.1)
+        cpu_count_logical = psutil.cpu_count(logical=True)  # Logical cores (with hyper-threading)
+        cpu_count_physical = psutil.cpu_count(logical=False)  # Physical cores
+
+        # Get CPU model/brand
+        try:
+            if platform.system() == 'Windows':
+                import subprocess
+                cpu_info = subprocess.check_output("wmic cpu get name", shell=True).decode()
+                cpu_model = cpu_info.split('\n')[1].strip()
+            else:
+                # For Linux/Mac
+                with open('/proc/cpuinfo', 'r') as f:
+                    for line in f:
+                        if 'model name' in line:
+                            cpu_model = line.split(':')[1].strip()
+                            break
+                    else:
+                        cpu_model = platform.processor()
+        except:
+            cpu_model = platform.processor() or "Nežinomas"
+
+        # Memory usage
+        memory = psutil.virtual_memory()
+        memory_total = memory.total / (1024 ** 3)  # Convert to GB
+        memory_used = memory.used / (1024 ** 3)
+        memory_percent = memory.percent
+
+        # Get RAM info - detailed modules information
+        try:
+            if platform.system() == 'Windows':
+                import subprocess
+                import re
+                # Get detailed info using CSV format for better parsing
+                ram_info = subprocess.check_output(
+                    "wmic memorychip get manufacturer, partnumber, capacity, speed /format:csv",
+                    shell=True
+                ).decode()
+
+                lines = [line.strip() for line in ram_info.split('\n') if line.strip()]
+                # Remove header and empty lines
+                lines = [line for line in lines if line and 'Node' not in line and 'Manufacturer' not in line]
+
+                if lines:
+                    modules = []
+                    for line in lines:
+                        try:
+                            # CSV format: Node,Capacity,Manufacturer,PartNumber,Speed
+                            parts = line.split(',')
+                            if len(parts) >= 5:
+                                capacity_str = parts[1].strip()
+                                manufacturer = parts[2].strip()
+                                partnumber = parts[3].strip()
+                                speed = parts[4].strip()
+
+                                # Parse capacity
+                                if capacity_str.isdigit():
+                                    capacity_bytes = int(capacity_str)
+                                    capacity_gb = capacity_bytes / (1024 ** 3)
+
+                                    # Build module info
+                                    module_parts = []
+                                    if manufacturer and manufacturer.lower() != 'unknown':
+                                        module_parts.append(manufacturer)
+                                    if partnumber:
+                                        module_parts.append(partnumber)
+
+                                    module_str = ' '.join(module_parts) if module_parts else "RAM"
+                                    module_info = f"{module_str} {capacity_gb:.0f}GB"
+
+                                    if speed and speed.isdigit():
+                                        module_info += f" {speed}MHz"
+
+                                    modules.append(module_info)
+                        except (ValueError, IndexError) as e:
+                            print(f"Error parsing RAM line: {line}, error: {e}")
+                            continue
+
+                    if modules:
+                        # Show number of each module type
+                        from collections import Counter
+                        module_counts = Counter(modules)
+                        module_strs = []
+                        for module, count in module_counts.items():
+                            if count > 1:
+                                module_strs.append(f"{count}x {module}")
+                            else:
+                                module_strs.append(module)
+
+                        if len(module_strs) == 1:
+                            memory_model = module_strs[0]
+                        else:
+                            # Use + to show modules are summed together
+                            memory_model = " + ".join(module_strs)
+                    else:
+                        memory_model = f"{memory_total:.0f} GB RAM"
+                else:
+                    memory_model = f"{memory_total:.0f} GB RAM"
+            else:
+                # For Linux (requires root for dmidecode)
+                memory_model = f"{memory_total:.0f} GB RAM"
+        except Exception as e:
+            print(f"Error getting RAM info: {e}")
+            import traceback
+            traceback.print_exc()
+            memory_model = f"{memory_total:.0f} GB RAM"
+
+        # Disk usage (main drive)
+        disk = psutil.disk_usage('/')
+        disk_total = disk.total / (1024 ** 3)  # Convert to GB
+        disk_used = disk.used / (1024 ** 3)
+        disk_percent = disk.percent
+
+        # Get disk info
+        try:
+            if platform.system() == 'Windows':
+                import subprocess
+                disk_info = subprocess.check_output("wmic diskdrive get model, size", shell=True).decode()
+                lines = [line.strip() for line in disk_info.split('\n') if line.strip() and 'Model' not in line]
+                if lines:
+                    # Parse first disk
+                    parts = lines[0].rsplit(None, 1)  # Split from right, last element is size
+                    if len(parts) >= 2:
+                        disk_model_name = parts[0].strip()
+                        disk_size_bytes = int(parts[1])
+                        disk_size_gb = disk_size_bytes / (1024 ** 3)
+                        disk_model = f"{disk_model_name} ({disk_size_gb:.0f} GB)"
+                    else:
+                        disk_model = parts[0].strip() if parts else "Kietasis diskas"
+                else:
+                    disk_model = "Kietasis diskas"
+            else:
+                # For Linux
+                partitions = psutil.disk_partitions()
+                if partitions:
+                    disk_model = partitions[0].device
+                else:
+                    disk_model = "Kietasis diskas"
+        except:
+            disk_model = "Kietasis diskas"
+
+        return jsonify({
+            'cpu': {
+                'percent': round(cpu_percent, 1),
+                'count_physical': cpu_count_physical,
+                'count_logical': cpu_count_logical,
+                'model': cpu_model
+            },
+            'memory': {
+                'total': round(memory_total, 2),
+                'used': round(memory_used, 2),
+                'percent': round(memory_percent, 1),
+                'model': memory_model
+            },
+            'disk': {
+                'total': round(disk_total, 2),
+                'used': round(disk_used, 2),
+                'percent': round(disk_percent, 1),
+                'model': disk_model
+            }
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     import os

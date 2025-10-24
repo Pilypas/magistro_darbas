@@ -628,10 +628,15 @@ class ResultDetailManager {
                 const metricsContent = document.getElementById('metricsContent');
 
                 let content = '<div class="table-responsive"><table class="table metrics-table">';
-                content += '<thead><tr><th>Stulpelis</th><th>RMSE</th><th>R²</th><th>MAPE (%)</th><th>MAE</th><th>Imties dydis</th></tr></thead><tbody>';
+                content += '<thead><tr><th>Stulpelis</th><th>RMSE</th><th>R²</th><th>MAPE (%)</th><th>MAE</th><th>Imties dydis</th><th>Imtis (%)</th></tr></thead><tbody>';
 
                 for (const [column, data] of Object.entries(metrics)) {
                     if (data.model_type === 'regression' || data.model_type === 'synthetic_test') {
+                        // Calculate sample percentage
+                        const samplePercent = data.total_samples && data.sample_size
+                            ? ((data.sample_size / data.total_samples) * 100).toFixed(1)
+                            : 'N/A';
+
                         content += `
                             <tr>
                                 <td><strong>${column}</strong></td>
@@ -640,6 +645,7 @@ class ResultDetailManager {
                                 <td>${data.mape?.toFixed(2) || 'N/A'}</td>
                                 <td>${data.mae?.toFixed(4) || 'N/A'}</td>
                                 <td>${data.sample_size || 'N/A'}</td>
+                                <td>${samplePercent}${samplePercent !== 'N/A' ? '%' : ''}</td>
                             </tr>
                         `;
                     }

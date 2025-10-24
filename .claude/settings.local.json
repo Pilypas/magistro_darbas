@@ -6,7 +6,8 @@
       "Bash(pip install:*)",
       "Bash(timeout /t 5 python app.py)",
       "Bash(dir:*)",
-      "Bash(pip show:*)"
+      "Bash(pip show:*)",
+      "Bash(wmic memorychip:*)"
     ],
     "deny": [],
     "ask": []
