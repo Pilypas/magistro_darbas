@@ -28,8 +28,18 @@ from pathlib import Path
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.utils import formatdate, make_msgid
 from email.mime.base import MIMEBase
 from email import encoders
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4, letter
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import inch
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image, PageBreak
+from reportlab.lib.enums import TA_CENTER, TA_LEFT
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+import tempfile
 
 # Load .env file for local development
 def load_env():
@@ -501,12 +511,340 @@ def get_comments(result_id):
         print(f"Error fetching comments: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
+def generate_result_pdf(rezultatas):
+    """Generate a detailed PDF report with all result information"""
+    temp_image_files = []  # Keep track of temporary image files
+    try:
+        print(f"Starting PDF generation for result: {rezultatas.get('rezultato_id')}")
+
+        # Register Unicode-supporting fonts
+        try:
+            from reportlab.pdfbase.ttfonts import TTFont
+            from reportlab.pdfbase import pdfmetrics
+            import os
+
+            # Try Windows fonts (Arial, Segoe UI) or system fonts
+            font_paths = [
+                ('C:/Windows/Fonts/arial.ttf', 'C:/Windows/Fonts/arialbd.ttf', 'Arial'),
+                ('C:/Windows/Fonts/segoeui.ttf', 'C:/Windows/Fonts/segoeuib.ttf', 'SegoeUI'),
+            ]
+
+            font_name = None
+            for regular_path, bold_path, name in font_paths:
+                if os.path.exists(regular_path) and os.path.exists(bold_path):
+                    try:
+                        pdfmetrics.registerFont(TTFont(name, regular_path))
+                        pdfmetrics.registerFont(TTFont(f'{name}-Bold', bold_path))
+                        font_name = name
+                        font_name_bold = f'{name}-Bold'
+                        print(f"Using {name} fonts for Unicode support")
+                        break
+                    except Exception as e:
+                        print(f"Failed to load {name}: {e}")
+                        continue
+
+            if not font_name:
+                raise Exception("No Unicode fonts found")
+
+        except Exception as e:
+            # Fallback to Helvetica if no Unicode fonts available
+            font_name = 'Helvetica'
+            font_name_bold = 'Helvetica-Bold'
+            print(f"Warning: Using Helvetica fonts (no Unicode support): {e}")
+
+        # Create temporary PDF file
+        temp_pdf = tempfile.NamedTemporaryFile(delete=False, suffix='.pdf', mode='wb')
+        pdf_path = temp_pdf.name
+        temp_pdf.close()
+        print(f"Created temporary PDF file: {pdf_path}")
+
+        # Create PDF document
+        doc = SimpleDocTemplate(pdf_path, pagesize=A4,
+                              topMargin=0.5*inch, bottomMargin=0.5*inch,
+                              leftMargin=0.5*inch, rightMargin=0.5*inch)
+
+        # Container for PDF elements
+        elements = []
+        styles = getSampleStyleSheet()
+        print("PDF document structure initialized")
+
+        # Custom styles with Unicode font
+        title_style = ParagraphStyle(
+            'CustomTitle',
+            parent=styles['Heading1'],
+            fontName=font_name_bold,
+            fontSize=20,
+            textColor=colors.HexColor('#2c3e50'),
+            spaceAfter=20,
+            alignment=TA_CENTER
+        )
+
+        heading_style = ParagraphStyle(
+            'CustomHeading',
+            parent=styles['Heading2'],
+            fontName=font_name_bold,
+            fontSize=14,
+            textColor=colors.HexColor('#34495e'),
+            spaceAfter=12,
+            spaceBefore=12
+        )
+
+        normal_style = ParagraphStyle(
+            'CustomNormal',
+            parent=styles['Normal'],
+            fontName=font_name,
+            fontSize=10
+        )
+
+        # Title
+        elements.append(Paragraph("Imputacijos Rezultato Ataskaita", title_style))
+        elements.append(Spacer(1, 0.3*inch))
+
+        # Basic Information
+        elements.append(Paragraph("Pagrindinė informacija", heading_style))
+
+        # Create a style for wrapping long text
+        wrap_style = ParagraphStyle(
+            'WrapStyle',
+            parent=styles['Normal'],
+            fontName=font_name,
+            fontSize=10,
+            leading=12
+        )
+
+        basic_info = [
+            ['Parametras', 'Reikšmė'],
+            ['Rezultato ID', Paragraph(rezultatas['rezultato_id'], wrap_style)],
+            ['Originalus failas', Paragraph(rezultatas['originalus_failas'], wrap_style)],
+            ['Imputuotas failas', Paragraph(rezultatas['imputuotas_failas'], wrap_style)],
+            ['Modelio tipas', 'Random Forest' if rezultatas['modelio_tipas'] == 'random_forest' else 'XGBoost'],
+            ['N Estimators', str(rezultatas['n_estimators'])],
+            ['Random State', str(rezultatas['random_state'])],
+            ['Trūkstamų pradžioje', f"{rezultatas['originalus_trukstamu_kiekis']:,}"],
+            ['Trūkstamų po apdorojimo', f"{rezultatas['imputuotas_trukstamu_kiekis']:,}"],
+            ['Apdoroti stulpeliai', str(rezultatas['apdorotu_stulpeliu_kiekis'])],
+            ['Sukūrimo data', rezultatas['sukurimo_data'].strftime('%Y-%m-%d %H:%M:%S')]
+        ]
+
+        # Add max_depth if available
+        if rezultatas.get('max_depth') is not None:
+            basic_info.append(['Max Depth', str(rezultatas['max_depth'])])
+
+        # Add learning_rate if available
+        if rezultatas.get('learning_rate') is not None:
+            basic_info.append(['Learning Rate', str(rezultatas['learning_rate'])])
+
+        basic_table = Table(basic_info, colWidths=[2.5*inch, 4*inch])
+        basic_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#34495e')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('FONTNAME', (0, 0), (-1, 0), font_name_bold),
+            ('FONTSIZE', (0, 0), (-1, 0), 11),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+            ('FONTNAME', (0, 1), (0, -1), font_name_bold),
+            ('FONTNAME', (0, 1), (1, -1), font_name),
+        ]))
+        elements.append(basic_table)
+        elements.append(Spacer(1, 0.3*inch))
+
+        # Model Metrics
+        print("Processing model metrics...")
+        if rezultatas.get('modelio_metrikos'):
+            try:
+                metrics = json_module.loads(rezultatas['modelio_metrikos']) if isinstance(rezultatas['modelio_metrikos'], str) else rezultatas['modelio_metrikos']
+                print(f"Parsed metrics: {type(metrics)}")
+
+                # Filter regression metrics
+                regression_metrics = {col: m for col, m in metrics.items()
+                                    if m.get('model_type') in ['regression', 'synthetic_test'] and 'rmse' in m}
+                print(f"Found {len(regression_metrics)} regression metrics")
+
+                if regression_metrics:
+                    elements.append(Paragraph("Modelio metrikos", heading_style))
+            except Exception as e:
+                print(f"Error parsing model metrics: {e}")
+                regression_metrics = {}
+        else:
+            print("No model metrics found")
+            regression_metrics = {}
+
+        if regression_metrics:
+
+                metrics_data = [['Stulpelis', 'RMSE', 'R²', 'MAPE (%)', 'MAE', 'Imties dydis']]
+
+                for col, m in regression_metrics.items():
+                    metrics_data.append([
+                        col,
+                        f"{m.get('rmse', 0):.4f}",
+                        f"{m.get('r2', 0):.4f}",
+                        f"{m.get('mape', 0):.2f}",
+                        f"{m.get('mae', 0):.4f}",
+                        str(m.get('sample_size', 0))
+                    ])
+
+                metrics_table = Table(metrics_data, colWidths=[1.5*inch, 0.9*inch, 0.8*inch, 1*inch, 0.9*inch, 1*inch])
+                metrics_table.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#3498db')),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                    ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                    ('FONTNAME', (0, 0), (-1, 0), font_name_bold),
+                    ('FONTNAME', (0, 1), (-1, -1), font_name),
+                    ('FONTSIZE', (0, 0), (-1, 0), 10),
+                    ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                    ('BACKGROUND', (0, 1), (-1, -1), colors.white),
+                    ('GRID', (0, 0), (-1, -1), 1, colors.black),
+                    ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.lightgrey]),
+                ]))
+                elements.append(metrics_table)
+                elements.append(Spacer(1, 0.3*inch))
+
+        # Feature Importance
+        print("Processing feature importance...")
+        if rezultatas.get('pozymiu_svarba'):
+            try:
+                importance = json_module.loads(rezultatas['pozymiu_svarba']) if isinstance(rezultatas['pozymiu_svarba'], str) else rezultatas['pozymiu_svarba']
+                print(f"Parsed importance: {type(importance)}")
+
+                if importance:
+                    elements.append(PageBreak())
+                    elements.append(Paragraph("Požymių svarba", heading_style))
+
+                    for col, features in importance.items():
+                        if features and isinstance(features, dict):
+                            elements.append(Paragraph(f"<b>Užpildant stulpelį: {col}</b>", normal_style))
+                            elements.append(Spacer(1, 0.1*inch))
+
+                            # Sort and get top 10 features
+                            sorted_features = sorted(features.items(), key=lambda x: x[1], reverse=True)[:10]
+
+                            feature_data = [['Požymis', 'Svarba']]
+                            for feature, value in sorted_features:
+                                feature_data.append([feature, f"{value:.4f}"])
+
+                            feature_table = Table(feature_data, colWidths=[4*inch, 2*inch])
+                            feature_table.setStyle(TableStyle([
+                                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2ecc71')),
+                                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                                ('FONTNAME', (0, 0), (-1, 0), font_name_bold),
+                                ('FONTNAME', (0, 1), (-1, -1), font_name),
+                                ('FONTSIZE', (0, 0), (-1, 0), 10),
+                                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                                ('BACKGROUND', (0, 1), (-1, -1), colors.white),
+                                ('GRID', (0, 0), (-1, -1), 1, colors.black),
+                                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.lightgrey]),
+                            ]))
+                            elements.append(feature_table)
+                            elements.append(Spacer(1, 0.2*inch))
+            except Exception as e:
+                print(f"Error parsing feature importance: {e}")
+                import traceback
+                traceback.print_exc()
+        else:
+            print("No feature importance found")
+
+        # Graphics/Plots
+        print("Processing graphics/plots...")
+        if rezultatas.get('grafikai'):
+            try:
+                plots = json_module.loads(rezultatas['grafikai']) if isinstance(rezultatas['grafikai'], str) else rezultatas['grafikai']
+                print(f"Parsed plots: {type(plots)}, keys: {plots.keys() if plots else 'None'}")
+
+                if plots:
+                    elements.append(PageBreak())
+                    elements.append(Paragraph("Grafinė analizė", heading_style))
+                    elements.append(Spacer(1, 0.2*inch))
+
+                    plot_titles = {
+                        'scatter_predictions': 'Faktinių ir prognozuotų reikšmių palyginimas',
+                        'performance_table': 'Modelių efektyvumo lentelė',
+                        'rmse_comparison': 'RMSE palyginimas',
+                        'r2_comparison': 'R² palyginimas',
+                        'mape_comparison': 'MAPE palyginimas',
+                        'radar_comparison': 'Bendrasis modelių palyginimas'
+                    }
+
+                    # Add all plots
+                    for plot_key in ['scatter_predictions', 'performance_table', 'rmse_comparison', 'r2_comparison', 'mape_comparison', 'radar_comparison']:
+                        if plot_key in plots:
+                            plot_data = plots[plot_key]
+                            title = plot_titles.get(plot_key, plot_key)
+                            print(f"Adding plot: {plot_key}")
+
+                            elements.append(Paragraph(f"<b>{title}</b>", normal_style))
+                            elements.append(Spacer(1, 0.1*inch))
+
+                            # Convert base64 to image
+                            try:
+                                img_data = base64.b64decode(plot_data)
+
+                                # Create temporary image file
+                                temp_img = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
+                                temp_img.write(img_data)
+                                temp_img.close()
+
+                                # Keep track of temp file for cleanup later
+                                temp_image_files.append(temp_img.name)
+
+                                # Add image to PDF
+                                img = Image(temp_img.name, width=6.5*inch, height=4.5*inch)
+                                elements.append(img)
+                                elements.append(Spacer(1, 0.2*inch))
+
+                                print(f"Successfully added plot: {plot_key}")
+                            except Exception as e:
+                                print(f"Error adding plot {plot_key}: {e}")
+                                import traceback
+                                traceback.print_exc()
+                                continue
+            except Exception as e:
+                print(f"Error parsing plots: {e}")
+                import traceback
+                traceback.print_exc()
+        else:
+            print("No plots found")
+
+        # Build PDF
+        print(f"Building PDF with {len(elements)} elements...")
+        doc.build(elements)
+        print(f"PDF successfully created at: {pdf_path}")
+
+        # Clean up temporary image files after PDF is built
+        for temp_img_path in temp_image_files:
+            try:
+                if os.path.exists(temp_img_path):
+                    os.unlink(temp_img_path)
+                    print(f"Cleaned up temp image: {temp_img_path}")
+            except Exception as e:
+                print(f"Error cleaning up temp image {temp_img_path}: {e}")
+
+        return pdf_path
+
+    except Exception as e:
+        print(f"Error generating PDF: {e}")
+        import traceback
+        traceback.print_exc()
+
+        # Clean up temporary image files on error
+        for temp_img_path in temp_image_files:
+            try:
+                if os.path.exists(temp_img_path):
+                    os.unlink(temp_img_path)
+            except:
+                pass
+
+        return None
+
 @app.route('/api/send-result-email', methods=['POST'])
 def send_result_email():
-    """Send result details to email"""
+    """Send result details to email with PDF attachment"""
     if not EMAIL_ENABLED:
         return jsonify({"error": "El. pašto siuntimas nesukonfigūruotas"}), 503
 
+    pdf_path = None
     try:
         data = request.get_json()
         result_id = data.get('result_id')
@@ -543,11 +881,21 @@ def send_result_email():
         if not rezultatas:
             return jsonify({"error": "Rezultatas nerastas"}), 404
 
+        # Generate PDF report
+        print(f"Generating PDF report for result {result_id}...")
+        pdf_path = generate_result_pdf(rezultatas)
+
+        if not pdf_path:
+            return jsonify({"error": "Nepavyko sugeneruoti PDF ataskaitos"}), 500
+
         # Create email
-        msg = MIMEMultipart('alternative')
+        msg = MIMEMultipart('mixed')
         msg['Subject'] = f"Imputacijos rezultatas: {rezultatas['originalus_failas']}"
-        msg['From'] = f"{EMAIL_CONFIG['from_name']} <{EMAIL_CONFIG['from_email']}>"
+        msg['From'] = EMAIL_CONFIG['from_email']
         msg['To'] = recipient_email
+        msg['Reply-To'] = EMAIL_CONFIG['from_email']
+        msg['Date'] = formatdate(localtime=True)
+        msg['Message-ID'] = make_msgid(domain='reapi.lt')
 
         # Create HTML body
         html_body = f"""
@@ -562,6 +910,7 @@ def send_result_email():
                 .stat-label {{ font-weight: bold; color: #667eea; }}
                 .stat-value {{ font-size: 1.2em; color: #2c3e50; }}
                 .footer {{ text-align: center; margin-top: 20px; color: #6c757d; font-size: 0.9em; }}
+                .attachment-note {{ background: #fff3cd; padding: 15px; margin: 20px 0; border-left: 4px solid #ffc107; border-radius: 5px; }}
             </style>
         </head>
         <body>
@@ -627,6 +976,11 @@ def send_result_email():
                         <div class="stat-label">Būsena:</div>
                         <div class="stat-value">{rezultatas['busena'].capitalize()}</div>
                     </div>
+
+                    <div class="attachment-note">
+                        <strong>📎 Pridėtas failas:</strong><br>
+                        Detalesnė ataskaita su modelio metrikomis, požymių svarba ir grafikais pridėta kaip PDF failas.
+                    </div>
                 </div>
                 <div class="footer">
                     <p>Šis el. laiškas buvo sugeneruotas automatiškai.</p>
@@ -637,22 +991,49 @@ def send_result_email():
         </html>
         """
 
-        msg.attach(MIMEText(html_body, 'html'))
+        # Attach HTML body
+        html_part = MIMEText(html_body, 'html')
+        msg.attach(html_part)
+
+        # Attach PDF file
+        with open(pdf_path, 'rb') as pdf_file:
+            pdf_attachment = MIMEBase('application', 'pdf')
+            pdf_attachment.set_payload(pdf_file.read())
+            encoders.encode_base64(pdf_attachment)
+
+            # Create filename for attachment
+            filename = f"rezultatas_{rezultatas['rezultato_id'][:8]}.pdf"
+            pdf_attachment.add_header('Content-Disposition', f'attachment; filename="{filename}"')
+            msg.attach(pdf_attachment)
 
         # Send email
+        print(f"Sending email to {recipient_email}...")
         with smtplib.SMTP(EMAIL_CONFIG['smtp_server'], EMAIL_CONFIG['smtp_port']) as server:
             server.starttls()
             server.login(EMAIL_CONFIG['smtp_username'], EMAIL_CONFIG['smtp_password'])
             server.send_message(msg)
 
+        print(f"Email sent successfully to {recipient_email}")
+
         return jsonify({
             "success": True,
-            "message": f"Rezultatas sėkmingai išsiųstas į {recipient_email}"
+            "message": f"Rezultatas su PDF ataskaita sėkmingai išsiųstas į {recipient_email}"
         }), 200
 
     except Exception as e:
         print(f"Error sending email: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({"error": f"Klaida siunčiant el. laišką: {str(e)}"}), 500
+
+    finally:
+        # Clean up temporary PDF file
+        if pdf_path and os.path.exists(pdf_path):
+            try:
+                os.unlink(pdf_path)
+                print(f"Cleaned up temporary PDF: {pdf_path}")
+            except Exception as e:
+                print(f"Error cleaning up PDF: {e}")
 
 @app.route('/api/comments', methods=['POST'])
 def create_comment():
