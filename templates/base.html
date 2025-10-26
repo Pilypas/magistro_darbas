@@ -291,13 +291,14 @@
             margin-bottom: 0;
         }
 
-        /* Tooltip styles */
-        .stat-item::after {
+        /* Tooltip styles - only for system monitor */
+        .system-monitor .stat-item::after {
             content: attr(data-tooltip);
             position: absolute;
             bottom: 100%;
-            left: 50%;
-            transform: translateX(-50%) translateY(-8px);
+            right: 0;
+            left: auto;
+            transform: translateX(0) translateY(-8px);
             background: rgba(0, 0, 0, 0.95);
             color: white;
             padding: 8px 12px;
@@ -316,38 +317,19 @@
             text-align: left;
         }
 
-        /* Adjust tooltip position for items near screen edge */
-        .system-monitor .stat-item::after {
-            right: 0;
-            left: auto;
-            transform: translateX(0) translateY(-8px);
-        }
-
-        .stat-item::before {
+        .system-monitor .stat-item::before {
             content: '';
             position: absolute;
             bottom: 100%;
-            left: 50%;
-            transform: translateX(-50%) translateY(-2px);
+            right: 20px;
+            left: auto;
+            transform: translateX(0) translateY(-2px);
             border: 6px solid transparent;
             border-top-color: rgba(0, 0, 0, 0.95);
             opacity: 0;
             pointer-events: none;
             transition: opacity 0.3s ease, transform 0.3s ease;
             z-index: 1001;
-        }
-
-        /* Adjust arrow position for system monitor tooltips */
-        .system-monitor .stat-item::before {
-            right: 20px;
-            left: auto;
-            transform: translateX(0) translateY(-2px);
-        }
-
-        .stat-item:hover::after,
-        .stat-item:hover::before {
-            opacity: 1;
-            transform: translateX(-50%) translateY(0);
         }
 
         .system-monitor .stat-item:hover::after {
@@ -360,16 +342,12 @@
             transform: translateX(0) translateY(4px);
         }
 
-        .stat-item:hover::before {
-            transform: translateX(-50%) translateY(4px);
-        }
-
-        [data-theme="dark"] .stat-item::after {
+        [data-theme="dark"] .system-monitor .stat-item::after {
             background: rgba(255, 255, 255, 0.95);
             color: #000;
         }
 
-        [data-theme="dark"] .stat-item::before {
+        [data-theme="dark"] .system-monitor .stat-item::before {
             border-top-color: rgba(255, 255, 255, 0.95);
         }
 
@@ -391,26 +369,27 @@
             margin-bottom: 6px;
         }
 
-        .progress {
+        /* Progress bar styles - scoped to system monitor only */
+        .system-monitor .progress {
             height: 8px;
             background-color: var(--bg-secondary);
             border-radius: 4px;
             overflow: hidden;
         }
 
-        .progress-bar {
+        .system-monitor .progress-bar {
             transition: width 0.5s ease, background-color 0.3s ease;
         }
 
-        .progress-bar.bg-success {
+        .system-monitor .progress-bar.bg-success {
             background: linear-gradient(90deg, #28a745, #20c997);
         }
 
-        .progress-bar.bg-warning {
+        .system-monitor .progress-bar.bg-warning {
             background: linear-gradient(90deg, #ffc107, #fd7e14);
         }
 
-        .progress-bar.bg-danger {
+        .system-monitor .progress-bar.bg-danger {
             background: linear-gradient(90deg, #dc3545, #e74c3c);
         }
 

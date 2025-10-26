@@ -7,7 +7,13 @@
       "Bash(timeout /t 5 python app.py)",
       "Bash(dir:*)",
       "Bash(pip show:*)",
-      "Bash(wmic memorychip:*)"
+      "Bash(wmic memorychip:*)",
+      "Bash(timeout /t 5)",
+      "Bash(ping:*)",
+      "Bash(del \"c:\\Users\\Administratorius\\Desktop\\magistro_darbas\\templates\\duomenu_konvertavimas.html\")",
+      "Bash(tasklist:*)",
+      "Bash(findstr:*)",
+      "Bash(find:*)"
     ],
     "deny": [],
     "ask": []

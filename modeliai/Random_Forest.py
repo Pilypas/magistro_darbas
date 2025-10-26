@@ -170,7 +170,7 @@ class RandomForestImputer:
             'total_samples': int(len(y_all))
         }
         self.test_predictions[target_col] = {
-            'y_test': y_test.values, 'y_pred': y_pred,
+            'y_true': y_test.values, 'y_pred': y_pred,
             'r2': r2, 'mae': mae, 'rmse': rmse
         }
 

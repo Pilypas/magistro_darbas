@@ -338,6 +338,28 @@
         #emailStatus {
             margin-top: 15px;
         }
+
+        /* Dark mode support for correlation analysis */
+        [data-theme="dark"] #correlationCard .btn-outline-primary {
+            color: #6ea8fe;
+            border-color: #6ea8fe;
+        }
+
+        [data-theme="dark"] #correlationCard .btn-outline-primary:hover {
+            background-color: #0d6efd;
+            color: white;
+        }
+
+        [data-theme="dark"] #correlationCard .btn-check:checked + .btn-outline-primary {
+            background-color: #0d6efd;
+            color: white;
+        }
+
+        [data-theme="dark"] #correlationCard .alert-info {
+            background-color: #1a3a52;
+            border-color: #0d6efd;
+            color: var(--text-primary);
+        }
 {% endblock %}
 
 {% block content %}
@@ -399,6 +421,122 @@
             <div class="detail-card" id="plotsCard" style="display: none;">
                 <h3 class="detail-title">Grafikai</h3>
                 <div id="plotsContent"></div>
+            </div>
+
+            <!-- Correlation Analysis -->
+            <div class="detail-card" id="correlationCard" style="display: none;">
+                <h3 class="detail-title">
+                    <i class="fas fa-chart-scatter me-2"></i>
+                    Duomenų kokybės įtaka modelio tikslumui
+                </h3>
+                <p class="text-muted">
+                    Šis grafikas rodo ryšį tarp trūkstamų reikšmių kiekio ir modelio tikslumo šiam konkrečiam rezultatui.
+                    Kiekvienas taškas atspindi vieną užpildytą stulpelį.
+                </p>
+
+                <!-- Metric info -->
+                <div class="mb-3">
+                    <div class="alert alert-info mb-0">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Metrika:</strong> R² (Determinacijos koeficientas) - rodo modelio tikslumo priklausomybę nuo trūkstamų reikšmių kiekio.
+                    </div>
+                </div>
+
+                <!-- Statistics -->
+                <div id="correlationStats" class="mb-3" style="display: none;">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <div class="alert alert-info mb-0">
+                                <small class="d-block text-muted mb-1">Vidutinis R²</small>
+                                <h5 class="mb-0">
+                                    <span id="avgR2" class="badge bg-primary">-</span>
+                                </h5>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="alert alert-warning mb-0">
+                                <small class="d-block text-muted mb-1">Vidutinis trūkstamų %</small>
+                                <h5 class="mb-0">
+                                    <span id="avgMissing" class="badge bg-secondary">-</span>
+                                </h5>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="alert alert-success mb-0">
+                                <small class="text-muted d-block">
+                                    <i class="fas fa-lightbulb me-1"></i>
+                                    <strong>Interpretacija:</strong> Didesnis R² rodo geresnį modelio tikslumą. R² vertė artima 1.0 reiškia labai gerą modelį.
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Chart container -->
+                <div id="correlationChart" style="width: 100%; height: 650px;"></div>
+            </div>
+
+            <!-- KDE Distribution Analysis -->
+            <div class="detail-card" id="kdeCard" style="display: none;">
+                <h3 class="detail-title">
+                    <i class="fas fa-chart-area me-2"></i>
+                    Duomenų pasiskirstymo palyginimas (KDE)
+                </h3>
+                <p class="text-muted">
+                    Branduolinio tankio įvertis (Kernel Density Estimation) leidžia palyginti originalių ir imputuotų duomenų pasiskirstymus <strong>test rinkinyje (20% duomenų)</strong>.
+                    KDE Overlap rodo, kiek procentų abu pasiskirstymai sutampa (1.0 = 100% sutapimas).
+                </p>
+
+                <!-- Indicator selector -->
+                <div class="mb-3">
+                    <label for="kdeIndicatorSelect" class="form-label fw-bold">
+                        <i class="fas fa-filter me-2"></i>Pasirinkite rodiklį:
+                    </label>
+                    <select id="kdeIndicatorSelect" class="form-select" style="max-width: 400px;">
+                        <option value="">Kraunama...</option>
+                    </select>
+                </div>
+
+                <!-- KDE Statistics -->
+                <div id="kdeStats" class="mb-3" style="display: none;">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <div class="alert alert-primary mb-0">
+                                <small class="d-block text-muted mb-1">KDE Overlap</small>
+                                <h5 class="mb-0">
+                                    <span id="kdeOverlap">-</span>
+                                </h5>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="alert alert-info mb-0">
+                                <small class="d-block text-muted mb-1">Tikrųjų vidurkis (test)</small>
+                                <h5 class="mb-0">
+                                    <span id="kdeOriginalMean">-</span>
+                                </h5>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="alert alert-success mb-0">
+                                <small class="d-block text-muted mb-1">Prognozių vidurkis (test)</small>
+                                <h5 class="mb-0">
+                                    <span id="kdeImputedMean">-</span>
+                                </h5>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="alert alert-warning mb-0">
+                                <small class="d-block text-muted mb-1">Test rinkinio dydis</small>
+                                <h5 class="mb-0">
+                                    <span id="kdeImputedCount">-</span>
+                                </h5>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- KDE Chart container -->
+                <div id="kdeChart" style="width: 100%; height: 500px;"></div>
             </div>
 
             <!-- Email Section -->
@@ -484,6 +622,7 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
 <script>
 class ResultDetailManager {
             constructor() {
@@ -997,6 +1136,490 @@ class ResultDetailManager {
             }
         }
 
+        // Correlation Analysis for specific result
+        class CorrelationAnalysis {
+            constructor(resultId) {
+                this.resultId = resultId;
+                this.data = null;
+                this.currentMetric = 'r2'; // Fixed to R² only
+            }
+
+            async loadData() {
+                try {
+                    const response = await fetch(`/api/rezultatai/${this.resultId}/koreliacijos-analize`);
+                    const data = await response.json();
+
+                    if (response.ok && data.data_points && data.data_points.length > 0) {
+                        this.data = data;
+
+                        // Show correlation card
+                        document.getElementById('correlationCard').style.display = 'block';
+
+                        // Wait for cards to be fully rendered before creating charts
+                        requestAnimationFrame(() => {
+                            requestAnimationFrame(() => {
+                                this.updateStatistics();
+                                this.renderChart();
+                            });
+                        });
+                    } else {
+                        console.log('Nepakanka duomenų koreliacijos analizei:', data.message);
+                    }
+                } catch (error) {
+                    console.error('Error loading correlation data:', error);
+                }
+            }
+
+            updateStatistics() {
+                const statsDiv = document.getElementById('correlationStats');
+                statsDiv.style.display = 'block';
+
+                // Calculate averages for R² only
+                const r2Values = this.data.data_points.filter(p => p.r2 !== null).map(p => p.r2);
+                const missingValues = this.data.data_points.map(p => p.missing_percentage);
+
+                if (r2Values.length > 0) {
+                    const avgR2 = r2Values.reduce((a, b) => a + b, 0) / r2Values.length;
+                    document.getElementById('avgR2').textContent = avgR2.toFixed(4);
+                    document.getElementById('avgR2').className =
+                        avgR2 >= 0.7 ? 'badge bg-success' :
+                        avgR2 >= 0.5 ? 'badge bg-primary' : 'badge bg-warning';
+                }
+
+                if (missingValues.length > 0) {
+                    const avgMissing = missingValues.reduce((a, b) => a + b, 0) / missingValues.length;
+                    document.getElementById('avgMissing').textContent = avgMissing.toFixed(2) + '%';
+                }
+            }
+
+            generateColorPalette(count, isDarkMode) {
+                // Generate distinct colors for each column
+                const baseColors = [
+                    '#2E86AB', '#A23B72', '#F18F01', '#C73E1D', '#6A994E',
+                    '#BC4B51', '#8661C1', '#2A9D8F', '#E76F51', '#F4A261',
+                    '#E63946', '#457B9D', '#A8DADC', '#1D3557', '#F77F00',
+                    '#06D6A0', '#118AB2', '#073B4C', '#EF476F', '#FFD166'
+                ];
+
+                // If dark mode, make colors brighter
+                if (isDarkMode) {
+                    return baseColors.slice(0, count).map(color => {
+                        // Lighten the color for dark mode
+                        return this.lightenColor(color, 30);
+                    });
+                }
+
+                return baseColors.slice(0, count);
+            }
+
+            lightenColor(color, percent) {
+                const num = parseInt(color.replace("#", ""), 16);
+                const amt = Math.round(2.55 * percent);
+                const R = Math.min(255, (num >> 16) + amt);
+                const G = Math.min(255, (num >> 8 & 0x00FF) + amt);
+                const B = Math.min(255, (num & 0x0000FF) + amt);
+                return "#" + (0x1000000 + R * 0x10000 + G * 0x100 + B).toString(16).slice(1);
+            }
+
+            renderChart() {
+                if (!this.data || !this.data.data_points) return;
+
+                const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
+
+                // Filter data points with R² values only
+                const dataPoints = this.data.data_points.filter(p => p.r2 !== null);
+
+                if (dataPoints.length === 0) {
+                    document.getElementById('correlationChart').innerHTML =
+                        '<div class="alert alert-warning">Nėra R² metrikų duomenų</div>';
+                    return;
+                }
+
+                // Generate color palette for each unique column
+                const columns = [...new Set(dataPoints.map(p => p.stulpelis))];
+                const colors = this.generateColorPalette(columns.length, isDarkMode);
+
+                const traces = [];
+
+                // Create a trace for each column
+                columns.forEach((column, index) => {
+                    const columnPoints = dataPoints.filter(p => p.stulpelis === column);
+
+                    const trace = {
+                        x: columnPoints.map(p => p.missing_percentage),
+                        y: columnPoints.map(p => p.r2),
+                        mode: 'markers',
+                        type: 'scatter',
+                        name: column,
+                        marker: {
+                            size: 12,
+                            color: colors[index],
+                            symbol: 'circle',
+                            line: {
+                                color: isDarkMode ? '#fff' : '#000',
+                                width: 1
+                            }
+                        },
+                        text: columnPoints.map(p => {
+                            let text = `Rodiklis: ${p.stulpelis}<br>`;
+                            text += `Trūkstamų: ${p.missing_percentage}%`;
+                            if (p.missing_count !== null && p.missing_count !== undefined) {
+                                text += ` (${p.missing_count} iš ${p.total_rows || 'N/A'} eilučių)<br>`;
+                            } else {
+                                text += '<br>';
+                            }
+                            text += `R²: ${p.r2}`;
+                            return text;
+                        }),
+                        hoverinfo: 'text'
+                    };
+
+                    traces.push(trace);
+                });
+
+                // Add trend line if we have enough data
+                if (dataPoints.length >= 3) {
+                    const x = dataPoints.map(p => p.missing_percentage);
+                    const y = dataPoints.map(p => p.r2);
+
+                    // Simple linear regression
+                    const n = x.length;
+                    const sumX = x.reduce((a, b) => a + b, 0);
+                    const sumY = y.reduce((a, b) => a + b, 0);
+                    const sumXY = x.reduce((sum, xi, i) => sum + xi * y[i], 0);
+                    const sumXX = x.reduce((sum, xi) => sum + xi * xi, 0);
+
+                    const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
+                    const intercept = (sumY - slope * sumX) / n;
+
+                    const minX = Math.min(...x);
+                    const maxX = Math.max(...x);
+                    const trendLine = {
+                        x: [minX, maxX],
+                        y: [slope * minX + intercept, slope * maxX + intercept],
+                        mode: 'lines',
+                        type: 'scatter',
+                        name: 'Tendencijos linija',
+                        line: {
+                            color: isDarkMode ? '#ffc107' : '#ff6b6b',
+                            width: 2,
+                            dash: 'dash'
+                        },
+                        hoverinfo: 'skip'
+                    };
+
+                    traces.push(trendLine);
+                }
+
+                const layout = {
+                    autosize: true,
+                    title: {
+                        text: 'Trūkstamų reikšmių įtaka R² (Determinacijos koef.)',
+                        font: {
+                            size: 18,
+                            color: isDarkMode ? '#e9ecef' : '#2c3e50',
+                            weight: 600
+                        }
+                    },
+                    xaxis: {
+                        title: {
+                            text: 'Trūkstamų reikšmių % (kiekvienam rodikliui)',
+                            font: {
+                                color: isDarkMode ? '#e9ecef' : '#495057',
+                                size: 14
+                            }
+                        },
+                        gridcolor: isDarkMode ? '#495057' : '#e9ecef',
+                        tickfont: { color: isDarkMode ? '#a0aec0' : '#6c757d' }
+                    },
+                    yaxis: {
+                        title: {
+                            text: 'R² reikšmė',
+                            font: {
+                                color: isDarkMode ? '#e9ecef' : '#495057',
+                                size: 14
+                            }
+                        },
+                        gridcolor: isDarkMode ? '#495057' : '#e9ecef',
+                        tickfont: { color: isDarkMode ? '#a0aec0' : '#6c757d' }
+                    },
+                    plot_bgcolor: isDarkMode ? '#1a202c' : '#ffffff',
+                    paper_bgcolor: isDarkMode ? '#2d3748' : '#f8f9fa',
+                    font: {
+                        family: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+                        color: isDarkMode ? '#e9ecef' : '#495057'
+                    },
+                    showlegend: true,
+                    legend: {
+                        orientation: 'h',
+                        x: 0.5,
+                        xanchor: 'center',
+                        y: -0.15,
+                        yanchor: 'top',
+                        bgcolor: isDarkMode ? '#2d3748' : 'rgba(255,255,255,0.9)',
+                        bordercolor: isDarkMode ? '#4a5568' : '#dee2e6',
+                        borderwidth: 1,
+                        font: {
+                            size: 12,
+                            color: isDarkMode ? '#e9ecef' : '#495057'
+                        }
+                    },
+                    hovermode: 'closest',
+                    margin: {
+                        l: 80,
+                        r: 50,
+                        t: 80,
+                        b: 120
+                    }
+                };
+
+                const config = {
+                    responsive: true,
+                    displayModeBar: true,
+                    displaylogo: false,
+                    modeBarButtonsToRemove: ['lasso2d', 'select2d'],
+                    toImageButtonOptions: {
+                        format: 'png',
+                        filename: `koreliacijos_analize_${this.resultId}_r2`,
+                        height: 600,
+                        width: 1000,
+                        scale: 2
+                    }
+                };
+
+                Plotly.newPlot('correlationChart', traces, layout, config).then(() => {
+                    // Force resize after plot is created to ensure full width
+                    setTimeout(() => {
+                        Plotly.Plots.resize('correlationChart');
+                    }, 100);
+                });
+            }
+
+        }
+
+        // KDE Analysis Manager
+        class KDEManager {
+            constructor(resultId) {
+                this.resultId = resultId;
+                this.currentIndicator = null;
+                this.indicators = [];
+                this.kdeData = null;
+            }
+
+            async loadIndicators() {
+                try {
+                    const response = await fetch(`/api/rezultatai/${this.resultId}/rodikliai`);
+                    const data = await response.json();
+
+                    if (response.ok && data.rodikliai && data.rodikliai.length > 0) {
+                        this.indicators = data.rodikliai;
+
+                        // Show KDE card
+                        document.getElementById('kdeCard').style.display = 'block';
+
+                        // Populate dropdown
+                        const select = document.getElementById('kdeIndicatorSelect');
+                        select.innerHTML = '';
+
+                        this.indicators.forEach((indicator, index) => {
+                            const option = document.createElement('option');
+                            option.value = indicator.pavadinimas;
+                            option.textContent = `${indicator.pavadinimas} (R²: ${indicator.r2 ? indicator.r2.toFixed(4) : 'N/A'})`;
+                            select.appendChild(option);
+                        });
+
+                        // Add change event listener
+                        select.addEventListener('change', () => {
+                            this.loadKDEData(select.value);
+                        });
+
+                        // Auto-select first indicator
+                        if (this.indicators.length > 0) {
+                            this.currentIndicator = this.indicators[0].pavadinimas;
+                            select.value = this.currentIndicator;
+                            this.loadKDEData(this.currentIndicator);
+                        }
+                    } else {
+                        console.log('Nėra rodiklių KDE analizei');
+                    }
+                } catch (error) {
+                    console.error('Error loading indicators:', error);
+                }
+            }
+
+            async loadKDEData(indicatorName) {
+                try {
+                    // Show loading state
+                    document.getElementById('kdeChart').innerHTML =
+                        '<div class="text-center p-5"><i class="fas fa-spinner fa-spin fa-2x text-primary"></i><p class="mt-2">Kraunami KDE duomenys...</p></div>';
+
+                    const response = await fetch(`/api/rezultatai/${this.resultId}/kde/${encodeURIComponent(indicatorName)}`);
+                    const data = await response.json();
+
+                    if (response.ok) {
+                        this.kdeData = data;
+                        this.renderKDEChart();
+                        this.updateStatistics();
+                    } else {
+                        document.getElementById('kdeChart').innerHTML =
+                            `<div class="alert alert-danger">Klaida: ${data.error}</div>`;
+                    }
+                } catch (error) {
+                    console.error('Error loading KDE data:', error);
+                    document.getElementById('kdeChart').innerHTML =
+                        '<div class="alert alert-danger">Įvyko klaida kraunant KDE duomenis</div>';
+                }
+            }
+
+            updateStatistics() {
+                if (!this.kdeData) return;
+
+                const statsDiv = document.getElementById('kdeStats');
+                statsDiv.style.display = 'block';
+
+                // Update overlap
+                document.getElementById('kdeOverlap').textContent = this.kdeData.overlap.toFixed(4);
+
+                // Update means (test set means)
+                document.getElementById('kdeOriginalMean').textContent = this.kdeData.statistics.original_mean.toFixed(4);
+                document.getElementById('kdeImputedMean').textContent = this.kdeData.statistics.imputed_mean.toFixed(4);
+
+                // Update test set size
+                document.getElementById('kdeImputedCount').textContent = this.kdeData.test_set_size + ' (' + this.kdeData.statistics.test_set_percentage + '%)';
+            }
+
+            renderKDEChart() {
+                if (!this.kdeData) return;
+
+                // Clear loading spinner
+                document.getElementById('kdeChart').innerHTML = '';
+
+                const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
+                const traces = [];
+
+                // Original KDE trace (solid line) - true values from test set
+                traces.push({
+                    x: this.kdeData.original.x,
+                    y: this.kdeData.original.y,
+                    type: 'scatter',
+                    mode: 'lines',
+                    name: 'Original KDE (test set)',
+                    line: {
+                        color: isDarkMode ? '#5ec269' : '#28a745',
+                        width: 3
+                    },
+                    fill: 'tozeroy',
+                    fillcolor: isDarkMode ? 'rgba(94, 194, 105, 0.2)' : 'rgba(40, 167, 69, 0.2)'
+                });
+
+                // Imputed KDE trace (dashed line) - predicted values from test set
+                const modelAbbr = this.kdeData.model_abbr || 'rf';
+                traces.push({
+                    x: this.kdeData.imputed.x,
+                    y: this.kdeData.imputed.y,
+                    type: 'scatter',
+                    mode: 'lines',
+                    name: `Imputed(${modelAbbr}) KDE (test set)`,
+                    line: {
+                        color: isDarkMode ? '#ffd93d' : '#ffc107',
+                        width: 3,
+                        dash: 'dash'
+                    },
+                    fill: 'tozeroy',
+                    fillcolor: isDarkMode ? 'rgba(255, 217, 61, 0.1)' : 'rgba(255, 193, 7, 0.1)'
+                });
+
+                const layout = {
+                    autosize: true,
+                    title: {
+                        text: `KDE Overlap: ${this.kdeData.overlap.toFixed(2)}`,
+                        font: {
+                            size: 16,
+                            color: isDarkMode ? '#e9ecef' : '#2c3e50'
+                        },
+                        y: 0.98,
+                        x: 0.5,
+                        xanchor: 'center',
+                        yanchor: 'top'
+                    },
+                    xaxis: {
+                        title: {
+                            text: this.kdeData.indicator,
+                            font: {
+                                color: isDarkMode ? '#e9ecef' : '#495057',
+                                size: 14
+                            }
+                        },
+                        gridcolor: isDarkMode ? '#495057' : '#e9ecef',
+                        tickfont: { color: isDarkMode ? '#a0aec0' : '#6c757d' },
+                        zeroline: false
+                    },
+                    yaxis: {
+                        title: {
+                            text: 'Tankis (Density)',
+                            font: {
+                                color: isDarkMode ? '#e9ecef' : '#495057',
+                                size: 14
+                            }
+                        },
+                        gridcolor: isDarkMode ? '#495057' : '#e9ecef',
+                        tickfont: { color: isDarkMode ? '#a0aec0' : '#6c757d' },
+                        zeroline: true,
+                        zerolinecolor: isDarkMode ? '#6c757d' : '#dee2e6'
+                    },
+                    plot_bgcolor: isDarkMode ? '#1a202c' : '#ffffff',
+                    paper_bgcolor: isDarkMode ? '#2d3748' : '#f8f9fa',
+                    font: {
+                        family: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+                        color: isDarkMode ? '#e9ecef' : '#495057'
+                    },
+                    showlegend: true,
+                    legend: {
+                        x: 0.5,
+                        xanchor: 'center',
+                        y: 1.1,
+                        yanchor: 'bottom',
+                        orientation: 'h',
+                        bgcolor: isDarkMode ? 'rgba(45, 55, 72, 0.9)' : 'rgba(255,255,255,0.9)',
+                        bordercolor: isDarkMode ? '#4a5568' : '#dee2e6',
+                        borderwidth: 1,
+                        font: {
+                            size: 12,
+                            color: isDarkMode ? '#e9ecef' : '#495057'
+                        }
+                    },
+                    margin: {
+                        l: 80,
+                        r: 50,
+                        t: 100,
+                        b: 80
+                    },
+                    hovermode: 'x unified'
+                };
+
+                const config = {
+                    responsive: true,
+                    displayModeBar: true,
+                    displaylogo: false,
+                    modeBarButtonsToRemove: ['lasso2d', 'select2d'],
+                    toImageButtonOptions: {
+                        format: 'png',
+                        filename: `kde_${this.kdeData.indicator}_${this.resultId}`,
+                        height: 600,
+                        width: 1000,
+                        scale: 2
+                    }
+                };
+
+                Plotly.newPlot('kdeChart', traces, layout, config).then(() => {
+                    // Force resize after plot is created to ensure full width
+                    setTimeout(() => {
+                        Plotly.Plots.resize('kdeChart');
+                    }, 100);
+                });
+            }
+        }
+
         // Initialize when page loads
         document.addEventListener('DOMContentLoaded', () => {
             const manager = new ResultDetailManager();
@@ -1009,6 +1632,30 @@ class ResultDetailManager {
             setTimeout(() => {
                 new CommentsManager(resultId);
             }, 500);
+
+            // Initialize correlation analysis - wait a bit longer to ensure DOM is ready
+            setTimeout(() => {
+                const correlationAnalysis = new CorrelationAnalysis(resultId);
+                correlationAnalysis.loadData();
+            }, 800);
+
+            // Initialize KDE Manager
+            setTimeout(() => {
+                const kdeManager = new KDEManager(resultId);
+                kdeManager.loadIndicators();
+            }, 1000);
+
+            // Add window resize listener for Plotly charts
+            window.addEventListener('resize', () => {
+                if (document.getElementById('correlationChart') &&
+                    document.getElementById('correlationCard').style.display !== 'none') {
+                    Plotly.Plots.resize('correlationChart');
+                }
+                if (document.getElementById('kdeChart') &&
+                    document.getElementById('kdeCard').style.display !== 'none') {
+                    Plotly.Plots.resize('kdeChart');
+                }
+            });
         });
 </script>
 {% endblock %}

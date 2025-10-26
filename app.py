@@ -1,7 +1,8 @@
-from flask import Flask, request, jsonify, send_file, render_template
+from flask import Flask, request, jsonify, send_file, render_template, session
 from flask_cors import CORS
 import pandas as pd
 import numpy as np
+from scipy.stats import gaussian_kde
 from modeliai import RandomForestImputer
 try:
     from modeliai import XGBoostImputer
@@ -66,6 +67,16 @@ CORS(app)
 
 # Configuration
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
+app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key-magistro-darbas-2025')
+app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0  # Disable cache for static files
+
+# Disable template caching in development
+@app.after_request
+def add_header(response):
+    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, post-check=0, pre-check=0, max-age=0'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '-1'
+    return response
 UPLOAD_FOLDER = 'uploads'
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
@@ -128,11 +139,19 @@ class DatabaseManager:
             return None
 
         try:
-            if self.connection is None or not self.connection.is_connected():
-                self.connection = mysql.connector.connect(**self.config)
+            # Always create a fresh connection for each request to avoid stale connection issues
+            # This is simpler and more reliable than connection pooling for this use case
+            if self.connection is not None:
+                try:
+                    self.connection.close()
+                except:
+                    pass
+
+            self.connection = mysql.connector.connect(**self.config)
             return self.connection
         except Error as e:
             print(f"Database connection error: {e}")
+            self.connection = None
             return None
 
     def close_connection(self):
@@ -173,10 +192,26 @@ def init_database_tables():
                 modelio_metrikos JSON,
                 pozymiu_svarba JSON,
                 grafikai JSON,
+                test_predictions JSON,
                 sukurimo_data DATETIME DEFAULT CURRENT_TIMESTAMP,
                 busena ENUM('vykdomas', 'baigtas', 'klaida') DEFAULT 'vykdomas'
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         """)
+
+        # Add test_predictions column if it doesn't exist (for existing tables)
+        cursor.execute("""
+            SELECT COUNT(*) as count
+            FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+            AND TABLE_NAME = 'imputacijos_rezultatai'
+            AND COLUMN_NAME = 'test_predictions'
+        """)
+        result = cursor.fetchone()
+        if result[0] == 0:  # Use index instead of key since cursor is not dictionary type
+            cursor.execute("""
+                ALTER TABLE imputacijos_rezultatai
+                ADD COLUMN test_predictions JSON AFTER grafikai
+            """)
 
         # Create rezultatu_komentarai table (separate from general komentarai)
         cursor.execute("""
@@ -445,9 +480,11 @@ def get_rezultatas(result_id):
     if not MYSQL_ENABLED:
         return jsonify({"error": "Rezultatų funkcija neprieinama - duomenų bazė nesukonfigūruota"}), 503
 
+    cursor = None
     try:
         connection = db_manager.get_connection()
         if not connection:
+            print(f"Failed to get database connection for result {result_id}")
             return jsonify({"error": "Nepavyko prisijungti prie duomenų bazės"}), 500
 
         cursor = connection.cursor(dictionary=True)
@@ -457,9 +494,9 @@ def get_rezultatas(result_id):
         """, (result_id,))
 
         rezultatas = cursor.fetchone()
-        cursor.close()
 
         if not rezultatas:
+            print(f"Result not found: {result_id}")
             return jsonify({"error": "Rezultatas nerastas"}), 404
 
         # Parse JSON fields
@@ -473,7 +510,23 @@ def get_rezultatas(result_id):
         return jsonify({"rezultatas": rezultatas})
 
     except Error as e:
+        print(f"Database error in get_rezultatas: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({"error": f"Duomenų bazės klaida: {str(e)}"}), 500
+
+    except Exception as e:
+        print(f"Unexpected error in get_rezultatas: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": f"Serverio klaida: {str(e)}"}), 500
+
+    finally:
+        if cursor:
+            try:
+                cursor.close()
+            except:
+                pass
 
 @app.route('/api/comments/<result_id>', methods=['GET'])
 def get_comments(result_id):
@@ -481,10 +534,12 @@ def get_comments(result_id):
     if not MYSQL_ENABLED:
         return jsonify({"comments": []}), 200  # Return empty array if DB not configured
 
+    cursor = None
     try:
         connection = db_manager.get_connection()
         if not connection:
-            return jsonify({"error": "Nepavyko prisijungti prie duomenų bazės"}), 500
+            print("Failed to get database connection for comments")
+            return jsonify({"comments": [], "count": 0}), 200  # Return empty instead of error
 
         cursor = connection.cursor(dictionary=True)
         cursor.execute("""
@@ -495,8 +550,6 @@ def get_comments(result_id):
         """, (result_id,))
 
         comments = cursor.fetchall()
-        cursor.close()
-        connection.close()
 
         # Format dates
         for comment in comments:
@@ -510,7 +563,17 @@ def get_comments(result_id):
 
     except Exception as e:
         print(f"Error fetching comments: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        import traceback
+        traceback.print_exc()
+        # Return empty array instead of error to prevent UI breaking
+        return jsonify({"comments": [], "count": 0}), 200
+
+    finally:
+        if cursor:
+            try:
+                cursor.close()
+            except:
+                pass
 
 def generate_result_pdf(rezultatas):
     """Generate a detailed PDF report with all result information"""
@@ -877,7 +940,6 @@ def send_result_email():
 
         rezultatas = cursor.fetchone()
         cursor.close()
-        connection.close()
 
         if not rezultatas:
             return jsonify({"error": "Rezultatas nerastas"}), 404
@@ -1075,7 +1137,6 @@ def create_comment():
 
         connection.commit()
         cursor.close()
-        connection.close()
 
         return jsonify({
             "success": True,
@@ -1253,6 +1314,360 @@ def generate_recommendations(model_stats, results):
         })
 
     return recommendations
+
+@app.route('/api/rezultatai/<result_id>/koreliacijos-analize', methods=['GET'])
+def get_rezultato_koreliacijos_analize(result_id):
+    """
+    Analyze correlation between missing data percentage and model accuracy for a specific result.
+    Returns data for scatter plot showing relationship between missing values and R²/MAPE for this result.
+    """
+    if not MYSQL_ENABLED:
+        return jsonify({"error": "Analizės funkcija neprieinama - duomenų bazė nesukonfigūruota"}), 503
+
+    cursor = None
+    try:
+        connection = db_manager.get_connection()
+        if not connection:
+            return jsonify({"error": "Nepavyko prisijungti prie duomenų bazės"}), 500
+
+        cursor = connection.cursor(dictionary=True)
+
+        # Get specific result with metrics
+        cursor.execute("""
+            SELECT rezultato_id, originalus_failas, modelio_tipas,
+                   originalus_trukstamu_kiekis, imputuotas_trukstamu_kiekis,
+                   apdorotu_stulpeliu_kiekis, modelio_metrikos, sukurimo_data
+            FROM imputacijos_rezultatai
+            WHERE rezultato_id = %s AND busena = 'baigtas' AND modelio_metrikos IS NOT NULL
+        """, (result_id,))
+
+        rezultatas = cursor.fetchone()
+
+        if not rezultatas:
+            return jsonify({
+                "data_points": [],
+                "message": "Rezultatas nerastas arba neturi metrikų."
+            })
+
+        # Process result to extract correlation data
+        data_points = []
+
+        try:
+            # Parse model metrics
+            metrikos = json_module.loads(rezultatas['modelio_metrikos']) if rezultatas['modelio_metrikos'] else {}
+
+            if not metrikos:
+                return jsonify({
+                    "data_points": [],
+                    "message": "Rezultatas neturi metrikų."
+                })
+
+            # Calculate total data cells (approximation based on processed columns)
+            apdorotu_stulpeliu = rezultatas['apdorotu_stulpeliu_kiekis']
+
+            if apdorotu_stulpeliu == 0:
+                return jsonify({
+                    "data_points": [],
+                    "message": "Nėra apdorotų stulpelių."
+                })
+
+            # For each column that was imputed, create a data point
+            for column_name, column_metrics in metrikos.items():
+                r2 = column_metrics.get('r2')
+                mape = column_metrics.get('mape')
+                rmse = column_metrics.get('rmse')
+                mae = column_metrics.get('mae')
+
+                # Only add if we have at least R² or MAPE
+                if r2 is None and mape is None:
+                    continue
+
+                # Get per-column missing percentage from metrics if available
+                # (New format - added in latest version)
+                if 'missing_percentage' in column_metrics:
+                    missing_percentage = column_metrics['missing_percentage']
+                    missing_count = column_metrics.get('missing_count', 0)
+                    total_rows = column_metrics.get('total_rows', None)
+                else:
+                    # Fallback for old results - use overall missing percentage as approximation
+                    originalus_missing = rezultatas['originalus_trukstamu_kiekis']
+                    imputuotas_missing = rezultatas['imputuotas_trukstamu_kiekis']
+                    uzpildyta = originalus_missing - imputuotas_missing
+
+                    # Estimate percentage (this is approximate - based on total missing)
+                    missing_percentage = (originalus_missing / (originalus_missing + uzpildyta * apdorotu_stulpeliu)) * 100 if originalus_missing > 0 else 0
+                    missing_count = None
+                    total_rows = None
+
+                data_point = {
+                    'rezultato_id': rezultatas['rezultato_id'],
+                    'failas': rezultatas['originalus_failas'],
+                    'stulpelis': column_name,
+                    'modelis': rezultatas['modelio_tipas'],
+                    'missing_percentage': round(missing_percentage, 2),
+                    'missing_count': missing_count,
+                    'total_rows': total_rows,
+                    'r2': round(r2, 4) if r2 is not None else None,
+                    'mape': round(mape, 2) if mape is not None else None,
+                    'rmse': round(rmse, 4) if rmse is not None else None,
+                    'mae': round(mae, 4) if mae is not None else None,
+                    'data': rezultatas['sukurimo_data'].strftime('%Y-%m-%d') if rezultatas['sukurimo_data'] else None
+                }
+
+                data_points.append(data_point)
+
+        except Exception as e:
+            print(f"Error processing result {result_id}: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({
+                "data_points": [],
+                "message": f"Klaida apdorojant rezultatą: {str(e)}"
+            })
+
+        return jsonify({
+            "data_points": data_points,
+            "total_points": len(data_points),
+            "modelio_tipas": rezultatas['modelio_tipas'],
+            "message": f"Surinkti {len(data_points)} duomenų taškai šiam rezultatui"
+        })
+
+    except Error as e:
+        print(f"Database error in correlation analysis: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": f"Duomenų bazės klaida: {str(e)}"}), 500
+
+    except Exception as e:
+        print(f"Unexpected error in correlation analysis: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": f"Serverio klaida: {str(e)}"}), 500
+
+    finally:
+        if cursor:
+            try:
+                cursor.close()
+            except:
+                pass
+
+@app.route('/api/rezultatai/<result_id>/rodikliai', methods=['GET'])
+def get_rezultato_rodikliai(result_id):
+    """
+    Get list of all indicators (columns) that were imputed for a specific result.
+    Returns list of column names with their metrics.
+    """
+    if not MYSQL_ENABLED:
+        return jsonify({"error": "Funkcija neprieinama - duomenų bazė nesukonfigūruota"}), 503
+
+    cursor = None
+    try:
+        connection = db_manager.get_connection()
+        if not connection:
+            return jsonify({"error": "Nepavyko prisijungti prie duomenų bazės"}), 500
+
+        cursor = connection.cursor(dictionary=True)
+
+        # Get specific result with metrics
+        cursor.execute("""
+            SELECT rezultato_id, originalus_failas, imputuotas_failas, modelio_metrikos
+            FROM imputacijos_rezultatai
+            WHERE rezultato_id = %s AND busena = 'baigtas'
+        """, (result_id,))
+
+        rezultatas = cursor.fetchone()
+
+        if not rezultatas:
+            return jsonify({"error": "Rezultatas nerastas"}), 404
+
+        # Parse model metrics to get column names
+        metrikos = json_module.loads(rezultatas['modelio_metrikos']) if rezultatas['modelio_metrikos'] else {}
+
+        if not metrikos:
+            return jsonify({"rodikliai": [], "message": "Rezultatas neturi metrikų"})
+
+        # Create list of indicators with their basic info
+        rodikliai = []
+        for column_name, column_metrics in metrikos.items():
+            rodikliai.append({
+                'pavadinimas': column_name,
+                'r2': round(column_metrics.get('r2', 0), 4) if column_metrics.get('r2') else None,
+                'missing_count': column_metrics.get('missing_count', 0),
+                'missing_percentage': column_metrics.get('missing_percentage', 0)
+            })
+
+        return jsonify({
+            "rodikliai": rodikliai,
+            "total": len(rodikliai)
+        })
+
+    except Exception as e:
+        print(f"Error getting indicators: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": f"Klaida: {str(e)}"}), 500
+
+    finally:
+        if cursor:
+            try:
+                cursor.close()
+            except:
+                pass
+
+@app.route('/api/rezultatai/<result_id>/kde/<indicator_name>', methods=['GET'])
+def get_rezultato_kde(result_id, indicator_name):
+    """
+    Calculate KDE for original and imputed data for a specific indicator.
+    Returns KDE curves and overlap metric.
+    """
+    if not MYSQL_ENABLED:
+        return jsonify({"error": "Funkcija neprieinama - duomenų bazė nesukonfigūruota"}), 503
+
+    cursor = None
+    try:
+        connection = db_manager.get_connection()
+        if not connection:
+            return jsonify({"error": "Nepavyko prisijungti prie duomenų bazės"}), 500
+
+        cursor = connection.cursor(dictionary=True)
+
+        # Get result with test_predictions and model type
+        cursor.execute("""
+            SELECT rezultato_id, test_predictions, modelio_tipas
+            FROM imputacijos_rezultatai
+            WHERE rezultato_id = %s AND busena = 'baigtas'
+        """, (result_id,))
+
+        rezultatas = cursor.fetchone()
+
+        if not rezultatas:
+            return jsonify({"error": "Rezultatas nerastas"}), 404
+
+        # Parse test_predictions
+        test_predictions = json_module.loads(rezultatas['test_predictions']) if rezultatas['test_predictions'] else None
+
+        if not test_predictions:
+            return jsonify({"error": "Test predictions nerasti - pakartokite imputaciją su nauja versija"}), 404
+
+        # Check if indicator exists in test predictions
+        if indicator_name not in test_predictions:
+            return jsonify({"error": f"Rodiklis '{indicator_name}' nerastas test predictions"}), 404
+
+        # Get test data for this indicator (20% test set)
+        indicator_test = test_predictions[indicator_name]
+
+        if not indicator_test or 'y_true' not in indicator_test or 'y_pred' not in indicator_test:
+            return jsonify({"error": f"Rodiklis '{indicator_name}' neturi test duomenų"}), 400
+
+        # Original data = y_true from test set (tikrosios reikšmės)
+        original_data = np.array(indicator_test['y_true'])
+
+        # Imputed data = y_pred from test set (imputuotos reikšmės)
+        imputed_data = np.array(indicator_test['y_pred'])
+
+        if len(original_data) == 0:
+            return jsonify({"error": f"Rodiklis '{indicator_name}' neturi test duomenų"}), 400
+
+        if len(imputed_data) == 0:
+            return jsonify({"error": f"Rodiklis '{indicator_name}' neturi prognozių"}), 400
+
+        # Calculate statistics on test set only
+        original_mean = float(np.mean(original_data))
+        original_std = float(np.std(original_data))
+        imputed_mean = float(np.mean(imputed_data))
+        imputed_std = float(np.std(imputed_data))
+
+        # Count - this is the test set size (20% of data)
+        test_count = len(original_data)
+        imputed_count = test_count  # All test values were "imputed" (predicted)
+
+        # Calculate KDE
+        try:
+            # Create KDE for original data
+            kde_original = gaussian_kde(original_data)
+
+            # Create KDE for imputed data
+            kde_imputed = gaussian_kde(imputed_data)
+
+            # Create x range for plotting (from min to max of both datasets)
+            x_min = min(original_data.min(), imputed_data.min())
+            x_max = max(original_data.max(), imputed_data.max())
+            x_range = x_max - x_min
+
+            # Extend range by 10% on each side for better visualization
+            x_min -= x_range * 0.1
+            x_max += x_range * 0.1
+
+            # Create 200 points for smooth curve
+            x_values = np.linspace(x_min, x_max, 200)
+
+            # Calculate KDE values
+            kde_original_values = kde_original(x_values)
+            kde_imputed_values = kde_imputed(x_values)
+
+            # Calculate KDE overlap (integral of minimum of two KDEs)
+            # This gives us a measure of similarity between distributions
+            min_kde = np.minimum(kde_original_values, kde_imputed_values)
+            # Use np.trapezoid for newer versions, fallback to np.trapz for older
+            try:
+                overlap = float(np.trapezoid(min_kde, x_values))
+            except AttributeError:
+                overlap = float(np.trapz(min_kde, x_values))
+
+            # Prepare response
+            # Get model type abbreviation for legend
+            model_type = rezultatas['modelio_tipas']
+            model_abbr = 'rf' if model_type == 'random_forest' else 'xgb'
+
+            return jsonify({
+                "indicator": indicator_name,
+                "model_type": model_type,
+                "model_abbr": model_abbr,
+                "original": {
+                    "x": x_values.tolist(),
+                    "y": kde_original_values.tolist(),
+                    "mean": original_mean,
+                    "std": original_std,
+                    "count": int(test_count)
+                },
+                "imputed": {
+                    "x": x_values.tolist(),
+                    "y": kde_imputed_values.tolist(),
+                    "mean": imputed_mean,
+                    "std": imputed_std,
+                    "count": int(test_count)
+                },
+                "overlap": round(overlap, 4),
+                "imputed_values_count": int(imputed_count),
+                "test_set_size": int(test_count),
+                "statistics": {
+                    "original_mean": round(original_mean, 4),
+                    "imputed_mean": round(imputed_mean, 4),
+                    "mean_difference": round(abs(imputed_mean - original_mean), 4),
+                    "original_std": round(original_std, 4),
+                    "imputed_std": round(imputed_std, 4),
+                    "test_set_percentage": 20  # Typically 20% for test set
+                }
+            })
+
+        except Exception as kde_error:
+            print(f"KDE calculation error: {str(kde_error)}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({"error": f"Klaida skaičiuojant KDE: {str(kde_error)}"}), 500
+
+    except Exception as e:
+        print(f"Error in KDE endpoint: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": f"Klaida: {str(e)}"}), 500
+
+    finally:
+        if cursor:
+            try:
+                cursor.close()
+            except:
+                pass
 
 @app.route('/api/komentarai', methods=['GET'])
 def get_komentarai():
@@ -1547,7 +1962,7 @@ def get_csv_data(filename):
 
 def save_imputation_result(filename, imputed_filename, model_type, n_estimators, random_state,
                           original_missing, imputed_missing, plots, feature_importance, model_metrics,
-                          max_depth=None, learning_rate=None):
+                          max_depth=None, learning_rate=None, test_predictions=None):
     """Save imputation result to database"""
     if not MYSQL_ENABLED:
         return None
@@ -1566,8 +1981,8 @@ def save_imputation_result(filename, imputed_filename, model_type, n_estimators,
                 modelio_tipas, n_estimators, random_state, max_depth, learning_rate,
                 originalus_trukstamu_kiekis, imputuotas_trukstamu_kiekis,
                 apdorotu_stulpeliu_kiekis, modelio_metrikos,
-                pozymiu_svarba, grafikai, busena
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                pozymiu_svarba, grafikai, test_predictions, busena
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """, (
             result_id, filename, imputed_filename, model_type,
             n_estimators, random_state, max_depth, learning_rate,
@@ -1576,6 +1991,7 @@ def save_imputation_result(filename, imputed_filename, model_type, n_estimators,
             json_module.dumps(model_metrics) if model_metrics else None,
             json_module.dumps(feature_importance) if feature_importance else None,
             json_module.dumps(plots) if plots else None,
+            json_module.dumps(test_predictions) if test_predictions else None,
             'baigtas'
         ))
 
@@ -1693,6 +2109,22 @@ def impute_missing_values(filename):
 
         # Generate model performance plots
         model_metrics = imputer.get_model_metrics()
+
+        # Add per-column missing data information to metrics
+        if model_metrics:
+            missing_original = df.isnull().sum()
+            total_rows = len(df)
+
+            for column_name in model_metrics.keys():
+                if column_name in df.columns:
+                    missing_count = int(missing_original[column_name])
+                    missing_percentage = round((missing_count / total_rows) * 100, 2)
+
+                    # Add missing data info to each column's metrics
+                    model_metrics[column_name]['missing_count'] = missing_count
+                    model_metrics[column_name]['missing_percentage'] = missing_percentage
+                    model_metrics[column_name]['total_rows'] = total_rows
+
         performance_plots = generate_model_performance_plots(model_metrics)
         plots.update(performance_plots)
 
@@ -1701,12 +2133,26 @@ def impute_missing_values(filename):
         scatter_plots = generate_scatter_plots(test_predictions, model_type)
         plots.update(scatter_plots)
 
+        # Convert test_predictions numpy arrays to lists for JSON serialization
+        test_predictions_serializable = {}
+        if test_predictions:
+            for column_name, pred_data in test_predictions.items():
+                # Check if pred_data is a dictionary with y_true and y_pred
+                if isinstance(pred_data, dict) and 'y_true' in pred_data and 'y_pred' in pred_data:
+                    test_predictions_serializable[column_name] = {
+                        'y_true': pred_data['y_true'].tolist() if isinstance(pred_data['y_true'], np.ndarray) else pred_data['y_true'],
+                        'y_pred': pred_data['y_pred'].tolist() if isinstance(pred_data['y_pred'], np.ndarray) else pred_data['y_pred']
+                    }
+                else:
+                    print(f"Warning: Skipping {column_name} - invalid test prediction format: {type(pred_data)}")
+                    print(f"pred_data content: {pred_data}")
+
         # Save result to database
         result_id = save_imputation_result(
             filename, imputed_filename, model_type, n_estimators, random_state,
             int(original_missing), int(df_imputed.isnull().sum().sum()),
             plots, feature_importance, model_metrics,
-            max_depth, learning_rate
+            max_depth, learning_rate, test_predictions_serializable
         )
 
         response_data = {
@@ -1791,18 +2237,18 @@ def generate_scatter_plots(test_predictions, model_type):
     for idx, (indicator, data) in enumerate(test_predictions.items()):
         ax = axes[idx]
 
-        y_test = data['y_test']
+        y_true = data['y_true']
         y_pred = data['y_pred']
         r2 = data['r2']
-        mae = data.get('mae', np.mean(np.abs(y_test - y_pred)))
-        rmse = data.get('rmse', np.sqrt(np.mean((y_test - y_pred)**2)))
+        mae = data.get('mae', np.mean(np.abs(y_true - y_pred)))
+        rmse = data.get('rmse', np.sqrt(np.mean((y_true - y_pred)**2)))
 
         # Scatter plot
-        ax.scatter(y_test, y_pred, alpha=0.6, edgecolors='k', s=60, color=plot_color)
+        ax.scatter(y_true, y_pred, alpha=0.6, edgecolors='k', s=60, color=plot_color)
 
         # Ideal line (y = x)
-        min_val = min(y_test.min(), y_pred.min())
-        max_val = max(y_test.max(), y_pred.max())
+        min_val = min(y_true.min(), y_pred.min())
+        max_val = max(y_true.max(), y_pred.max())
         ax.plot([min_val, max_val], [min_val, max_val], 'r--', lw=2, label='Ideali linija (y=x)')
 
         # Formatting
