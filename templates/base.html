@@ -6,6 +6,10 @@
     <title>{% block title %}Duomenų analizės sistema{% endblock %}</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/favicon/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon/favicon-16x16.png">
+    <link rel="manifest" href="/static/favicon/site.webmanifest">
     <style>
         /* Base styles */
         :root {
@@ -476,7 +480,7 @@
     {% block content %}{% endblock %}
 
     <!-- System Monitor Widget -->
-    <div class="system-monitor" id="systemMonitor">
+    <div class="system-monitor" id="systemMonitor" style="display: none;">
         <div class="system-monitor-header" onclick="toggleSystemMonitor()">
             <h6>
                 <i class="fas fa-server me-2"></i>
@@ -644,6 +648,12 @@
             updateTimer: null,
 
             init() {
+                // Show the widget first (it starts hidden to prevent flash)
+                const widget = document.getElementById('systemMonitor');
+                if (widget) {
+                    widget.style.display = 'block';
+                }
+
                 this.loadMinimizedState();
                 this.startUpdating();
             },
