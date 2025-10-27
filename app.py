@@ -488,6 +488,14 @@ def get_rezultatas(result_id):
             return jsonify({"error": "Nepavyko prisijungti prie duomenų bazės"}), 500
 
         cursor = connection.cursor(dictionary=True)
+
+        # Use longer timeout for large responses
+        if connection:
+            try:
+                cursor.execute("SET SESSION MAX_EXECUTION_TIME=60000")  # 60 seconds
+            except:
+                pass  # Ignore if not supported
+
         cursor.execute("""
             SELECT * FROM imputacijos_rezultatai
             WHERE rezultato_id = %s
@@ -499,13 +507,27 @@ def get_rezultatas(result_id):
             print(f"Result not found: {result_id}")
             return jsonify({"error": "Rezultatas nerastas"}), 404
 
-        # Parse JSON fields
-        if rezultatas['modelio_metrikos']:
-            rezultatas['modelio_metrikos'] = json_module.loads(rezultatas['modelio_metrikos'])
-        if rezultatas['pozymiu_svarba']:
-            rezultatas['pozymiu_svarba'] = json_module.loads(rezultatas['pozymiu_svarba'])
-        if rezultatas['grafikai']:
-            rezultatas['grafikai'] = json_module.loads(rezultatas['grafikai'])
+        # Parse JSON fields with error handling
+        try:
+            if rezultatas['modelio_metrikos']:
+                rezultatas['modelio_metrikos'] = json_module.loads(rezultatas['modelio_metrikos'])
+        except Exception as e:
+            print(f"Error parsing modelio_metrikos: {e}")
+            rezultatas['modelio_metrikos'] = None
+
+        try:
+            if rezultatas['pozymiu_svarba']:
+                rezultatas['pozymiu_svarba'] = json_module.loads(rezultatas['pozymiu_svarba'])
+        except Exception as e:
+            print(f"Error parsing pozymiu_svarba: {e}")
+            rezultatas['pozymiu_svarba'] = None
+
+        try:
+            if rezultatas['grafikai']:
+                rezultatas['grafikai'] = json_module.loads(rezultatas['grafikai'])
+        except Exception as e:
+            print(f"Error parsing grafikai: {e}")
+            rezultatas['grafikai'] = None
 
         return jsonify({"rezultatas": rezultatas})
 

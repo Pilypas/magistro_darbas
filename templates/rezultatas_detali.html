@@ -631,28 +631,78 @@ class ResultDetailManager {
                 this.contentContainer = document.getElementById('contentContainer');
 
                 this.resultId = window.location.pathname.split('/').pop();
+                this.maxRetries = 3;
+                this.retryDelay = 2000; // Start with 2 seconds
                 this.loadResult();
             }
 
-            async loadResult() {
+            async loadResult(retryCount = 0) {
                 try {
-                    const response = await fetch(`/api/rezultatai/${this.resultId}`);
+                    // Show loading with retry count if retrying
+                    if (retryCount > 0) {
+                        const loadingText = document.querySelector('#loadingContainer p');
+                        if (loadingText) {
+                            loadingText.textContent = `Kraunami rezultatai... (Bandymas ${retryCount + 1}/${this.maxRetries + 1})`;
+                        }
+                    }
+
+                    // Fetch with timeout (60 seconds)
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 60000);
+
+                    const response = await fetch(`/api/rezultatai/${this.resultId}`, {
+                        signal: controller.signal
+                    });
+                    clearTimeout(timeoutId);
+
+                    // Check if response is ok
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+
+                    // Try to parse JSON
                     const data = await response.json();
 
-                    if (response.ok) {
+                    if (data.rezultatas) {
                         this.renderResult(data.rezultatas);
                     } else {
-                        this.showError();
+                        throw new Error('Invalid response format');
                     }
                 } catch (error) {
                     console.error('Error loading result:', error);
-                    this.showError();
+
+                    // Retry logic
+                    if (retryCount < this.maxRetries) {
+                        const delay = this.retryDelay * Math.pow(2, retryCount); // Exponential backoff
+                        console.log(`Retrying in ${delay}ms... (${retryCount + 1}/${this.maxRetries})`);
+
+                        setTimeout(() => {
+                            this.loadResult(retryCount + 1);
+                        }, delay);
+                    } else {
+                        // Show error after all retries exhausted
+                        this.showError(error.message);
+                    }
                 }
             }
 
-            showError() {
+            showError(message = '') {
                 this.loadingContainer.style.display = 'none';
                 this.errorContainer.style.display = 'block';
+
+                // Add retry button
+                const errorMsg = this.errorContainer.querySelector('.alert');
+                if (errorMsg && !errorMsg.querySelector('.retry-btn')) {
+                    const retryBtn = document.createElement('button');
+                    retryBtn.className = 'btn btn-primary mt-3 retry-btn';
+                    retryBtn.innerHTML = '<i class="fas fa-redo me-2"></i>Bandyti dar kartą';
+                    retryBtn.onclick = () => {
+                        this.errorContainer.style.display = 'none';
+                        this.loadingContainer.style.display = 'block';
+                        this.loadResult();
+                    };
+                    errorMsg.appendChild(retryBtn);
+                }
             }
 
             renderResult(result) {
