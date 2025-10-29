@@ -171,7 +171,7 @@
             <div class="col-12">
                 <div class="card">
                     <div class="card-header">
-                        <h5><i class="fas fa-upload"></i> Duomenų įkėlimas</h5>
+                        <h5>Duomenų įkėlimas</h5>
                     </div>
                     <div class="card-body">
                         <div class="upload-area" id="uploadArea">
@@ -197,17 +197,17 @@
             <div class="col-12">
                 <div class="card">
                     <div class="card-header">
-                        <h5><i class="fas fa-chart-bar"></i> Duomenų apžvalga</h5>
+                        <h5>Duomenų apžvalga</h5>
                     </div>
                     <div class="card-body">
                         <div class="row" id="statsCards"></div>
                         <div class="row mt-3">
                             <div class="col-12" id="actionButtonsContainer">
                                 <button class="btn btn-info me-2" onclick="analyzeData()">
-                                    <i class="fas fa-search"></i> Detali analizė
+                                    Detali analizė
                                 </button>
                                 <button class="btn btn-success" id="imputeButton" onclick="showImputeModal()">
-                                    <i class="fas fa-magic"></i> Užpildyti trūkstamas reikšmes
+                                    Užpildyti trūkstamas reikšmes
                                 </button>
                             </div>
                         </div>
@@ -273,7 +273,7 @@
             <div class="col-12">
                 <div class="card">
                     <div class="card-header">
-                        <h5><i class="fas fa-chart-line"></i> Duomenų analizės rezultatai</h5>
+                        <h5>Duomenų analizės rezultatai</h5>
                     </div>
                     <div class="card-body">
                         <div id="analysisPlots"></div>
@@ -282,7 +282,6 @@
                         <div id="missingOverTimeSection" style="display: none;">
                             <hr class="my-4">
                             <h6>
-                                <i class="fas fa-chart-area me-2"></i>
                                 Trūkstamų reikšmių pasiskirstymas pagal metus ir rodiklius
                             </h6>
                             <p class="text-muted small mb-3">
@@ -292,10 +291,10 @@
                             <!-- Toggle between views -->
                             <div class="btn-group mb-3" role="group">
                                 <button type="button" class="btn btn-outline-primary active" id="heatmapViewBtn" onclick="switchTimeView('heatmap')">
-                                    <i class="fas fa-th"></i> Šilumos žemėlapis
+                                    Šilumos žemėlapis
                                 </button>
                                 <button type="button" class="btn btn-outline-primary" id="barViewBtn" onclick="switchTimeView('bar')">
-                                    <i class="fas fa-chart-bar"></i> Stulpelinė diagrama
+                                    Stulpelinė diagrama
                                 </button>
                             </div>
 
@@ -308,13 +307,13 @@
                         <!-- NUTS-2 Map Section -->
                         <div id="nuts2MapSection" style="display: none;">
                             <hr class="my-4">
-                            <h6><i class="fas fa-map"></i> NUTS-2 regionų žemėlapis</h6>
+                            <h6>NUTS-2 regionų žemėlapis</h6>
 
                             <!-- Map Controls -->
                             <div class="row mb-3">
                                 <div class="col-md-6">
                                     <label for="indicatorSelect" class="form-label">
-                                        <i class="fas fa-database me-1"></i>Ekonominis rodiklis:
+                                        Ekonominis rodiklis:
                                     </label>
                                     <select id="indicatorSelect" class="form-select">
                                         <option value="">-- Pasirinkite rodiklį --</option>
@@ -322,7 +321,7 @@
                                 </div>
                                 <div class="col-md-6">
                                     <label for="yearSelect" class="form-label">
-                                        <i class="fas fa-calendar me-1"></i>Metai:
+                                        Metai:
                                     </label>
                                     <select id="yearSelect" class="form-select">
                                         <option value="">-- Pasirinkite metus --</option>
@@ -399,7 +398,6 @@
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title">
-                        <i class="fas fa-cogs me-2"></i>
                         Užpildymo nustatymai
                     </h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
@@ -486,9 +484,8 @@
                         <div class="col-12">
                             <div class="card bg-light">
                                 <div class="card-body">
-                                    <h6><i class="fas fa-chart-bar me-1"></i>Numatoma trukmė:</h6>
+                                    <h6>Numatoma trukmė:</h6>
                                     <p class="mb-0" id="estimatedDuration">
-                                        <i class="fas fa-clock me-1"></i>
                                         Priklausomai nuo duomenų dydžio: 30s - 5min
                                     </p>
                                 </div>
@@ -498,11 +495,9 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                        <i class="fas fa-times me-1"></i>
                         Atšaukti
                     </button>
                     <button type="button" class="btn btn-success" onclick="performImputation()">
-                        <i class="fas fa-magic me-1"></i> 
                         Pradėti užpildymą
                     </button>
                 </div>
@@ -1753,7 +1748,7 @@ function showAccuracyMetrics() {
         const result = window.currentImputationResult;
         const metricsSection = document.getElementById('accuracyMetricsSection');
 
-        let metricsHtml = '<div class="mt-4"><h5><i class="fas fa-chart-line"></i> Modelių efektyvumo vertinimas</h5>';
+        let metricsHtml = '<div class="mt-4"><h5>Modelių efektyvumo vertinimas</h5>';
 
         if (result.plots && result.plots['performance_table']) {
             metricsHtml += `

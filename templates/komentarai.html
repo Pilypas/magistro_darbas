@@ -155,13 +155,13 @@
 {% block content %}
 <div class="container">
         <div class="page-header">
-            <h1><i class="fas fa-comments comment-icon"></i>Komentarai</h1>
+            <h1>Komentarai</h1>
             <p class="lead">Palikite savo atsiliepimą apie duomenų analizės sistemą</p>
         </div>
 
         <!-- Komentaro pridėjimo forma -->
         <div class="form-container">
-            <h3 class="form-title"><i class="fas fa-pen me-2"></i>Pridėti komentarą</h3>
+            <h3 class="form-title">Pridėti komentarą</h3>
             <form id="commentForm">
                 <div class="row">
                     <div class="col-md-6 mb-3">
@@ -179,7 +179,7 @@
                 </div>
                 <button type="submit" class="btn btn-submit">
                     <span class="submit-text">
-                        <i class="fas fa-paper-plane me-2"></i>Pateikti komentarą
+                        Pateikti komentarą
                     </span>
                     <span class="loading-spinner">
                         <i class="fas fa-spinner fa-spin me-2"></i>Siunčiama...
@@ -317,7 +317,7 @@
                 const commentsHtml = comments.map(comment => this.renderComment(comment)).join('');
 
                 this.commentsContainer.innerHTML = `
-                    <h3 class="mb-4"><i class="fas fa-comment-dots me-2"></i>Visi komentarai (${comments.length})</h3>
+                    <h3 class="mb-4">Visi komentarai (${comments.length})</h3>
                     ${commentsHtml}
                 `;
             }
@@ -348,14 +348,14 @@
             <div class="comment-header">
                 <div>
                     <div class="comment-author">
-                        <i class="fas fa-user me-2"></i>${this.escapeHtml(comment.vardas)}
+                        ${this.escapeHtml(comment.vardas)}
                     </div>
                     ${comment.el_pastas ? `<div class="comment-email">
-                        <i class="fas fa-envelope me-2"></i>${this.escapeHtml(comment.el_pastas)}
+                        ${this.escapeHtml(comment.el_pastas)}
                     </div>` : ''}
                 </div>
                 <div class="comment-date">
-                    <i class="fas fa-calendar me-1"></i>${shown}
+                    ${shown}
                 </div>
             </div>
             <div class="comment-content">
