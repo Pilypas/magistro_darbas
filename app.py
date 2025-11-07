@@ -2401,64 +2401,46 @@ def download_test_comparison_excel(result_id):
 
         # Create legend sheet
         legend_ws = wb.create_sheet("Legenda", 0)
-        legend_ws['A1'] = "Test Set Comparison Legenda"
-        legend_ws['A1'].font = Font(bold=True, size=14)
+        legend_ws['A1'] = "Spalvų paaiškinimas"
+        legend_ws['A1'].font = Font(bold=True, size=16)
 
-        legend_ws['A3'] = "Spalvų reikšmės:"
-        legend_ws['A3'].font = Font(bold=True)
+        legend_ws['A3'] = "Pavyzdys"
+        legend_ws['A3'].font = Font(bold=True, size=12)
+        legend_ws['B3'] = "Ką reiškia"
+        legend_ws['B3'].font = Font(bold=True, size=12)
 
-        legend_ws['A4'] = "Žalias tekstas"
-        legend_ws['A4'].font = Font(color="006100", bold=True)
-        legend_ws['A4'].border = thin_border
-        legend_ws['B4'] = "Test set: Tikroji reikšmė (20% duomenų, naudoti modelio vertinimui)"
-
-        legend_ws['A5'] = "Geltona/ruda tekstas"
-        legend_ws['A5'].font = Font(color="9C6500", bold=True)
-        legend_ws['A5'].border = thin_border
-        legend_ws['B5'] = "Test set: Imputuota reikšmė (modelio prognozė test rinkinyje)"
-
-        legend_ws['A6'] = "Geltonas fonas"
-        legend_ws['A6'].fill = yellow_fill
-        legend_ws['A6'].font = yellow_font
-        legend_ws['A6'].border = thin_border
-        legend_ws['B6'] = "Imputuota reikšmė (ne test set, 80% duomenų)"
-
-        legend_ws['A7'] = "Be spalvos"
-        legend_ws['A7'].border = thin_border
-        legend_ws['B7'] = "Originalios reikšmės (nebuvo trūkstamų)"
-
-        legend_ws['A9'] = "Test set formatas:"
-        legend_ws['A9'].font = Font(bold=True)
-
-        # Create rich text example for legend
+        # Example with rich text
         legend_example_green = InlineFont(color="006100", b=True)
         legend_example_yellow = InlineFont(color="9C6500", b=True)
-        legend_ws['A10'].value = CellRichText(
+        legend_ws['A4'].value = CellRichText(
             TextBlock(legend_example_green, "118.0"),
             TextBlock(InlineFont(), " / "),
             TextBlock(legend_example_yellow, "112.554654")
         )
-        legend_ws['A10'].fill = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
-        legend_ws['A10'].border = thin_border
-        legend_ws['B10'] = "Tikroji (žalias tekstas) / Imputuota (geltonas tekstas)"
+        legend_ws['A4'].fill = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
+        legend_ws['A4'].border = thin_border
+        legend_ws['A4'].alignment = center_alignment
+        legend_ws['B4'] = "Tikroji reikšmė / Modelio prognozė"
 
-        legend_ws['A12'] = "Kitos imputuotos reikšmės:"
-        legend_ws['A12'].font = Font(bold=True)
-        legend_ws['A13'] = "112.554654"
-        legend_ws['A13'].fill = yellow_fill
-        legend_ws['A13'].font = yellow_font
-        legend_ws['A13'].border = thin_border
-        legend_ws['B13'] = "Tik imputuota reikšmė (80% duomenų, ne test set)"
+        legend_ws['A5'] = "112.554654"
+        legend_ws['A5'].fill = yellow_fill
+        legend_ws['A5'].font = yellow_font
+        legend_ws['A5'].border = thin_border
+        legend_ws['A5'].alignment = center_alignment
+        legend_ws['B5'] = "Užpildyta reikšmė"
 
-        legend_ws['A15'] = "Pastabos:"
-        legend_ws['A15'].font = Font(bold=True)
-        legend_ws['A16'] = "• 20% duomenų su žinomomis reikšmėmis buvo paslėpti (test set)"
-        legend_ws['A17'] = "• Test set langeliuose tikroji reikšmė rodoma žaliu tekstu, prognozė - geltoniu"
-        legend_ws['A18'] = "• Kitos imputuotos reikšmės (80%) pažymėtos geltonu fonu"
-        legend_ws['A19'] = "• Be spalvos - originalios reikšmės, kurios nebuvo trūkstamos"
+        legend_ws['A6'] = "95.8"
+        legend_ws['A6'].border = thin_border
+        legend_ws['A6'].alignment = center_alignment
+        legend_ws['B6'] = "Originali reikšmė (nebuvo trūkstama)"
 
-        legend_ws.column_dimensions['A'].width = 30
-        legend_ws.column_dimensions['B'].width = 60
+        legend_ws['A8'] = "Pastaba:"
+        legend_ws['A8'].font = Font(bold=True, size=11)
+        legend_ws['A9'] = "20% duomenų su žinomomis reikšmėmis naudojami modelio tikslumo vertinimui."
+        legend_ws['A10'] = "Šiuose langeliuose matote tikrąją reikšmę ir modelio prognozę."
+
+        legend_ws.column_dimensions['A'].width = 25
+        legend_ws.column_dimensions['B'].width = 45
 
         # Save to BytesIO
         excel_file = io.BytesIO()
