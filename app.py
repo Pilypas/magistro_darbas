@@ -3,6 +3,10 @@ from flask_cors import CORS
 import pandas as pd
 import numpy as np
 from scipy.stats import gaussian_kde
+from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from openpyxl.cell.text import InlineFont
+from openpyxl.cell.rich_text import TextBlock, CellRichText
 from modeliai import RandomForestImputer
 try:
     from modeliai import XGBoostImputer
@@ -2105,29 +2109,43 @@ def impute_missing_values(filename):
         plots['comparison'] = base64.b64encode(img_buffer.getvalue()).decode()
         plt.close()
 
-        # Feature importance plot
+        # Feature importance plots - generate individual plot for each column
         feature_importance = imputer.get_feature_importance()
         if feature_importance:
-            fig, axes = plt.subplots(len(feature_importance), 1,
-                                   figsize=(12, 4 * len(feature_importance)))
-            if len(feature_importance) == 1:
-                axes = [axes]
-
-            for idx, (col, importance) in enumerate(feature_importance.items()):
+            for col, importance in feature_importance.items():
                 if importance:
-                    features = list(importance.keys())
-                    importances = list(importance.values())
+                    # Sort by importance (descending)
+                    sorted_importance = dict(sorted(importance.items(), key=lambda x: x[1], reverse=True))
 
-                    axes[idx].barh(features, importances)
-                    axes[idx].set_title(f'Požymių svarba užpildant: {col}')
-                    axes[idx].set_xlabel('Svarba')
+                    # Take top 15 features for better visualization
+                    top_features = dict(list(sorted_importance.items())[:15])
+                    features = list(top_features.keys())
+                    importances = list(top_features.values())
 
-            plt.tight_layout()
-            img_buffer = io.BytesIO()
-            plt.savefig(img_buffer, format='png', dpi=150, bbox_inches='tight')
-            img_buffer.seek(0)
-            plots['feature_importance'] = base64.b64encode(img_buffer.getvalue()).decode()
-            plt.close()
+                    # Create individual plot for this column
+                    fig, ax = plt.subplots(figsize=(10, max(6, len(features) * 0.4)))
+
+                    # Horizontal bar chart
+                    bars = ax.barh(range(len(features)), importances, color='#667eea')
+                    ax.set_yticks(range(len(features)))
+                    ax.set_yticklabels(features)
+                    ax.set_xlabel('Svarba (Importance)', fontsize=11, fontweight='bold')
+                    ax.set_title(f'Požymių svarba užpildant: {col}', fontsize=13, fontweight='bold', pad=15)
+
+                    # Add value labels on bars
+                    for i, (bar, val) in enumerate(zip(bars, importances)):
+                        ax.text(val, i, f' {val:.4f}', va='center', fontsize=9)
+
+                    ax.grid(axis='x', alpha=0.3, linestyle='--')
+                    plt.tight_layout()
+
+                    img_buffer = io.BytesIO()
+                    plt.savefig(img_buffer, format='png', dpi=150, bbox_inches='tight')
+                    img_buffer.seek(0)
+
+                    # Store with column-specific key
+                    plots[f'feature_importance_{col}'] = base64.b64encode(img_buffer.getvalue()).decode()
+                    plt.close()
 
         # Generate model performance plots
         model_metrics = imputer.get_model_metrics()
@@ -2163,7 +2181,8 @@ def impute_missing_values(filename):
                 if isinstance(pred_data, dict) and 'y_true' in pred_data and 'y_pred' in pred_data:
                     test_predictions_serializable[column_name] = {
                         'y_true': pred_data['y_true'].tolist() if isinstance(pred_data['y_true'], np.ndarray) else pred_data['y_true'],
-                        'y_pred': pred_data['y_pred'].tolist() if isinstance(pred_data['y_pred'], np.ndarray) else pred_data['y_pred']
+                        'y_pred': pred_data['y_pred'].tolist() if isinstance(pred_data['y_pred'], np.ndarray) else pred_data['y_pred'],
+                        'test_indices': pred_data.get('test_indices', [])  # Include test indices if available
                     }
                 else:
                     print(f"Warning: Skipping {column_name} - invalid test prediction format: {type(pred_data)}")
@@ -2227,6 +2246,346 @@ def download_file(filename):
     except Exception as e:
         print(f"Download error: {e}")
         return jsonify({"error": str(e)}), 500
+
+@app.route('/api/rezultatai/<result_id>/download-test-comparison', methods=['GET'])
+def download_test_comparison_excel(result_id):
+    """
+    Generate and download Excel file with test set comparison.
+    Works for both Random Forest and XGBoost models.
+    Shows actual values (green) vs predicted values (yellow) for 20% test data.
+    Format in cells: 118 (green) / 112.554654 (yellow background)
+    All other imputed values are marked with yellow background.
+    """
+    if not MYSQL_ENABLED:
+        return jsonify({"error": "Funkcija neprieinama - duomenų bazė nesukonfigūruota"}), 503
+
+    cursor = None
+    try:
+        connection = db_manager.get_connection()
+        if not connection:
+            return jsonify({"error": "Nepavyko prisijungti prie duomenų bazės"}), 500
+
+        cursor = connection.cursor(dictionary=True)
+
+        # Get result data from database
+        cursor.execute("""
+            SELECT originalus_failas, imputuotas_failas, test_predictions, modelio_tipas
+            FROM imputacijos_rezultatai
+            WHERE rezultato_id = %s
+        """, (result_id,))
+
+        result = cursor.fetchone()
+
+        if not result:
+            return jsonify({"error": "Rezultatas nerastas"}), 404
+
+        # Parse test_predictions JSON
+        test_predictions = json_module.loads(result['test_predictions']) if result['test_predictions'] else {}
+
+        if not test_predictions:
+            return jsonify({"error": "Test predictions duomenys nerasti"}), 404
+
+        # Load original and imputed dataframes
+        original_filepath = os.path.join(UPLOAD_FOLDER, result['originalus_failas'])
+        imputed_filepath = os.path.join(UPLOAD_FOLDER, result['imputuotas_failas'])
+
+        if not os.path.exists(original_filepath):
+            return jsonify({"error": "Originalus failas nerastas"}), 404
+        if not os.path.exists(imputed_filepath):
+            return jsonify({"error": "Imputuotas failas nerastas"}), 404
+
+        df_original = pd.read_csv(original_filepath)
+        df_imputed = pd.read_csv(imputed_filepath)
+
+        # Create Excel workbook
+        wb = Workbook()
+        wb.remove(wb.active)  # Remove default sheet
+
+        # Define styles
+        green_fill = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")
+        green_font = Font(color="006100", bold=True)
+        yellow_fill = PatternFill(start_color="FFEB9C", end_color="FFEB9C", fill_type="solid")
+        yellow_font = Font(color="9C6500", bold=True)
+        header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+        header_font = Font(color="FFFFFF", bold=True)
+        center_alignment = Alignment(horizontal="center", vertical="center")
+
+        # Define border style - thin gray borders
+        thin_border = Border(
+            left=Side(style='thin', color='A6A6A6'),
+            right=Side(style='thin', color='A6A6A6'),
+            top=Side(style='thin', color='A6A6A6'),
+            bottom=Side(style='thin', color='A6A6A6')
+        )
+
+        # Identify which cells were originally missing (need to be imputed)
+        missing_mask = df_original.isnull()
+
+        # Create sheet with full data
+        ws = wb.create_sheet("Test Set Comparison")
+
+        # Write headers
+        headers = list(df_imputed.columns)
+        for col_idx, header in enumerate(headers, start=1):
+            cell = ws.cell(row=1, column=col_idx, value=header)
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = center_alignment
+            cell.border = thin_border
+
+        # Write data
+        for row_idx in range(len(df_imputed)):
+            for col_idx, col_name in enumerate(headers, start=1):
+                value = df_imputed.iloc[row_idx, col_idx - 1]
+                cell = ws.cell(row=row_idx + 2, column=col_idx)
+
+                # Check if this cell was originally missing
+                was_missing = missing_mask.iloc[row_idx, col_idx - 1]
+
+                # Check if this column has test predictions and this row is in test set
+                if col_name in test_predictions:
+                    pred_data = test_predictions[col_name]
+                    test_indices = pred_data.get('test_indices', [])
+
+                    if row_idx in test_indices:
+                        # This is a TEST SET cell - show actual (green) / predicted (yellow)
+                        test_pos = test_indices.index(row_idx)
+                        y_true = pred_data['y_true'][test_pos]
+                        y_pred = pred_data['y_pred'][test_pos]
+
+                        # Format: actual (green) / predicted (yellow) using Rich Text
+                        # Create rich text with different formatting for each part
+                        true_text = f"{y_true:.6g}"
+                        pred_text = f"{y_pred:.6f}"
+
+                        # Green text for true value
+                        green_inline_font = InlineFont(color="006100", b=True)
+                        # Yellow/brown text for predicted value
+                        yellow_inline_font = InlineFont(color="9C6500", b=True)
+
+                        # Create rich text: green true value + separator + yellow predicted value
+                        cell.value = CellRichText(
+                            TextBlock(green_inline_font, true_text),
+                            TextBlock(InlineFont(), " / "),
+                            TextBlock(yellow_inline_font, pred_text)
+                        )
+                        # Light background for the whole cell
+                        cell.fill = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
+                        cell.alignment = center_alignment
+                        cell.border = thin_border
+                    elif was_missing:
+                        # This cell was imputed but NOT in test set - show only imputed value in yellow
+                        cell.value = value
+                        cell.fill = yellow_fill
+                        cell.font = yellow_font
+                        cell.border = thin_border
+                    else:
+                        # Original value (not missing)
+                        cell.value = value
+                        cell.border = thin_border
+                elif was_missing:
+                    # This cell was imputed - mark it yellow
+                    cell.value = value
+                    cell.fill = yellow_fill
+                    cell.font = yellow_font
+                    cell.border = thin_border
+                else:
+                    # Original value (not imputed)
+                    cell.value = value
+                    cell.border = thin_border
+
+        # Adjust column widths
+        for col_idx, header in enumerate(headers, start=1):
+            column_letter = ws.cell(row=1, column=col_idx).column_letter
+            ws.column_dimensions[column_letter].width = 20
+
+        # Create legend sheet
+        legend_ws = wb.create_sheet("Legenda", 0)
+        legend_ws['A1'] = "Test Set Comparison Legenda"
+        legend_ws['A1'].font = Font(bold=True, size=14)
+
+        legend_ws['A3'] = "Spalvų reikšmės:"
+        legend_ws['A3'].font = Font(bold=True)
+
+        legend_ws['A4'] = "Žalias tekstas"
+        legend_ws['A4'].font = Font(color="006100", bold=True)
+        legend_ws['A4'].border = thin_border
+        legend_ws['B4'] = "Test set: Tikroji reikšmė (20% duomenų, naudoti modelio vertinimui)"
+
+        legend_ws['A5'] = "Geltona/ruda tekstas"
+        legend_ws['A5'].font = Font(color="9C6500", bold=True)
+        legend_ws['A5'].border = thin_border
+        legend_ws['B5'] = "Test set: Imputuota reikšmė (modelio prognozė test rinkinyje)"
+
+        legend_ws['A6'] = "Geltonas fonas"
+        legend_ws['A6'].fill = yellow_fill
+        legend_ws['A6'].font = yellow_font
+        legend_ws['A6'].border = thin_border
+        legend_ws['B6'] = "Imputuota reikšmė (ne test set, 80% duomenų)"
+
+        legend_ws['A7'] = "Be spalvos"
+        legend_ws['A7'].border = thin_border
+        legend_ws['B7'] = "Originalios reikšmės (nebuvo trūkstamų)"
+
+        legend_ws['A9'] = "Test set formatas:"
+        legend_ws['A9'].font = Font(bold=True)
+
+        # Create rich text example for legend
+        legend_example_green = InlineFont(color="006100", b=True)
+        legend_example_yellow = InlineFont(color="9C6500", b=True)
+        legend_ws['A10'].value = CellRichText(
+            TextBlock(legend_example_green, "118.0"),
+            TextBlock(InlineFont(), " / "),
+            TextBlock(legend_example_yellow, "112.554654")
+        )
+        legend_ws['A10'].fill = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
+        legend_ws['A10'].border = thin_border
+        legend_ws['B10'] = "Tikroji (žalias tekstas) / Imputuota (geltonas tekstas)"
+
+        legend_ws['A12'] = "Kitos imputuotos reikšmės:"
+        legend_ws['A12'].font = Font(bold=True)
+        legend_ws['A13'] = "112.554654"
+        legend_ws['A13'].fill = yellow_fill
+        legend_ws['A13'].font = yellow_font
+        legend_ws['A13'].border = thin_border
+        legend_ws['B13'] = "Tik imputuota reikšmė (80% duomenų, ne test set)"
+
+        legend_ws['A15'] = "Pastabos:"
+        legend_ws['A15'].font = Font(bold=True)
+        legend_ws['A16'] = "• 20% duomenų su žinomomis reikšmėmis buvo paslėpti (test set)"
+        legend_ws['A17'] = "• Test set langeliuose tikroji reikšmė rodoma žaliu tekstu, prognozė - geltoniu"
+        legend_ws['A18'] = "• Kitos imputuotos reikšmės (80%) pažymėtos geltonu fonu"
+        legend_ws['A19'] = "• Be spalvos - originalios reikšmės, kurios nebuvo trūkstamos"
+
+        legend_ws.column_dimensions['A'].width = 30
+        legend_ws.column_dimensions['B'].width = 60
+
+        # Save to BytesIO
+        excel_file = io.BytesIO()
+        wb.save(excel_file)
+        excel_file.seek(0)
+
+        # Generate filename
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"test_comparison_{result['modelio_tipas']}_{timestamp}.xlsx"
+
+        return send_file(
+            excel_file,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name=filename
+        )
+
+    except Exception as e:
+        print(f"Error generating Excel file: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": f"Klaida generuojant Excel failą: {str(e)}"}), 500
+
+    finally:
+        if cursor:
+            cursor.close()
+
+@app.route('/api/rezultatai/<result_id>/download-original-xlsx', methods=['GET'])
+def download_original_xlsx(result_id):
+    """
+    Download original CSV file converted to Excel format (.xlsx)
+    """
+    if not MYSQL_ENABLED:
+        return jsonify({"error": "Funkcija neprieinama - duomenų bazė nesukonfigūruota"}), 503
+
+    cursor = None
+    try:
+        connection = db_manager.get_connection()
+        if not connection:
+            return jsonify({"error": "Nepavyko prisijungti prie duomenų bazės"}), 500
+
+        cursor = connection.cursor(dictionary=True)
+
+        # Get result data from database
+        cursor.execute("""
+            SELECT originalus_failas
+            FROM imputacijos_rezultatai
+            WHERE rezultato_id = %s
+        """, (result_id,))
+
+        result = cursor.fetchone()
+
+        if not result:
+            return jsonify({"error": "Rezultatas nerastas"}), 404
+
+        # Load original CSV file
+        original_filepath = os.path.join(UPLOAD_FOLDER, result['originalus_failas'])
+
+        if not os.path.exists(original_filepath):
+            return jsonify({"error": "Originalus failas nerastas"}), 404
+
+        df_original = pd.read_csv(original_filepath)
+
+        # Create Excel workbook
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Original Data"
+
+        # Define styles
+        header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+        header_font = Font(color="FFFFFF", bold=True)
+        center_alignment = Alignment(horizontal="center", vertical="center")
+        thin_border = Border(
+            left=Side(style='thin', color='A6A6A6'),
+            right=Side(style='thin', color='A6A6A6'),
+            top=Side(style='thin', color='A6A6A6'),
+            bottom=Side(style='thin', color='A6A6A6')
+        )
+
+        # Write headers
+        headers = list(df_original.columns)
+        for col_idx, header in enumerate(headers, start=1):
+            cell = ws.cell(row=1, column=col_idx, value=header)
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = center_alignment
+            cell.border = thin_border
+
+        # Write data
+        for row_idx in range(len(df_original)):
+            for col_idx, col_name in enumerate(headers, start=1):
+                value = df_original.iloc[row_idx, col_idx - 1]
+                cell = ws.cell(row=row_idx + 2, column=col_idx)
+                cell.value = value
+                cell.border = thin_border
+
+        # Adjust column widths
+        for col_idx, header in enumerate(headers, start=1):
+            column_letter = ws.cell(row=1, column=col_idx).column_letter
+            ws.column_dimensions[column_letter].width = 15
+
+        # Save to BytesIO
+        excel_file = io.BytesIO()
+        wb.save(excel_file)
+        excel_file.seek(0)
+
+        # Generate filename
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        base_name = os.path.splitext(result['originalus_failas'])[0]
+        filename = f"{base_name}_original_{timestamp}.xlsx"
+
+        return send_file(
+            excel_file,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name=filename
+        )
+
+    except Exception as e:
+        print(f"Error generating original Excel file: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": f"Klaida generuojant Excel failą: {str(e)}"}), 500
+
+    finally:
+        if cursor:
+            cursor.close()
 
 def generate_scatter_plots(test_predictions, model_type):
     """Generate scatter plots for actual vs predicted values"""
