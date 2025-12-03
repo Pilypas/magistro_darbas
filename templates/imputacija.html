@@ -491,6 +491,20 @@
 
                     <div class="row">
                         <div class="col-12">
+                            <div class="mb-3">
+                                <label class="form-label">
+                                    <i class="fas fa-columns"></i> Išmesti stulpelius iš imputacijos
+                                </label>
+                                <textarea class="form-control" id="excludeColumns" rows="3" placeholder="Pvz.: geo, year, id_column"></textarea>
+                                <div class="form-text">
+                                    Įveskite stulpelių pavadinius, kurie neturėtų būti imputuojami, atskirtus kableliais arba tarpais (pvz.: geo, year arba geo year id_column).
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-12">
                             <div class="card bg-light">
                                 <div class="card-body">
                                     <h6>Numatoma trukmė:</h6>
@@ -522,6 +536,7 @@
 <script src="{{ url_for('static', filename='js/map.js') }}"></script>
 <script>
 let currentFilename = null;
+let currentStats = null;  // Store current file stats for modal
 
 // File upload handling
 const uploadArea = document.getElementById('uploadArea');
@@ -646,6 +661,9 @@ function loadFileByName(filename) {
 }
 
 function displayDataOverview(stats) {
+    // Store stats globally for use in modal
+    currentStats = stats;
+
     const statsCards = document.getElementById('statsCards');
 
     const missingCount = Object.values(stats.missing_values).reduce((a, b) => a + b, 0);
@@ -1180,7 +1198,7 @@ async function loadMapData() {
 
                 const firstRow = mapData[0];
                 const allColumns = Object.keys(firstRow).filter(key =>
-                    key !== 'geo' && key !== 'time_period'
+                    key !== 'geo' && key !== 'year'
                 );
 
                 availableIndicators = allColumns.filter(col => {
@@ -1493,6 +1511,15 @@ async function performImputation() {
     const learningRateInput = document.getElementById('learningRate').value;
     const learningRate = modelType === 'xgboost' && learningRateInput ? parseFloat(learningRateInput) : null;
 
+    // Get excluded columns from text input (comma or space separated)
+    const excludeColumnsInput = document.getElementById('excludeColumns');
+    const excludeColumnsText = excludeColumnsInput.value.trim();
+
+    // Parse comma or space separated column names
+    const excludedColumns = excludeColumnsText
+        ? excludeColumnsText.split(/[,\s]+/).filter(col => col.length > 0)
+        : [];
+
     bootstrap.Modal.getInstance(document.getElementById('imputeModal')).hide();
 
     document.getElementById('imputationProgress').style.display = 'block';
@@ -1503,7 +1530,10 @@ async function performImputation() {
     document.getElementById('startTime').textContent = startTimeStr;
 
     const modelName = modelType === 'xgboost' ? 'XGBoost' : 'Random Forest';
-    document.getElementById('progressTitle').textContent = `Inicijuojamas ${modelName} užpildymo procesas...`;
+    const progressTitleText = excludedColumns.length > 0
+        ? `Inicijuojamas ${modelName} užpildymo procesas (${excludedColumns.length} stulpeliai praleisti)...`
+        : `Inicijuojamas ${modelName} užpildymo procesas...`;
+    document.getElementById('progressTitle').textContent = progressTitleText;
 
     const estimatedDuration = parseInt(nEstimators) * (modelType === 'xgboost' ? 60 : 50);
     const progressTimer = simulateProgress(estimatedDuration);
@@ -1517,7 +1547,8 @@ async function performImputation() {
                 n_estimators: parseInt(nEstimators),
                 random_state: parseInt(randomState),
                 max_depth: maxDepth,
-                learning_rate: learningRate
+                learning_rate: learningRate,
+                exclude_columns: excludedColumns
             })
         });
 

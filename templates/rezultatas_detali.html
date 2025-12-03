@@ -123,15 +123,61 @@
             background: linear-gradient(135deg, #28a745, #20c997);
             border: none;
             color: white;
-            padding: 10px 20px;
-            border-radius: 10px;
+            padding: 6px 12px;
+            border-radius: 8px;
             font-weight: 500;
+            font-size: 0.85rem;
             transition: transform 0.2s ease;
         }
 
         .download-btn:hover {
             transform: translateY(-1px);
             color: white;
+        }
+
+        .btn-excel {
+            background: linear-gradient(135deg, #28a745, #20c997);
+            border: none;
+            color: white;
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-weight: 500;
+            font-size: 0.85rem;
+            transition: transform 0.2s ease;
+        }
+
+        .btn-excel:hover {
+            transform: translateY(-1px);
+            color: white;
+        }
+
+        .btn-original {
+            background: linear-gradient(135deg, #17a2b8, #138496);
+            border: none;
+            color: white;
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-weight: 500;
+            font-size: 0.85rem;
+            transition: transform 0.2s ease;
+        }
+
+        .btn-original:hover {
+            transform: translateY(-1px);
+            color: white;
+        }
+
+        /* Dark mode support for buttons */
+        [data-theme="dark"] .download-btn,
+        [data-theme="dark"] .btn-excel,
+        [data-theme="dark"] .btn-original {
+            opacity: 0.95;
+        }
+
+        [data-theme="dark"] .download-btn:hover,
+        [data-theme="dark"] .btn-excel:hover,
+        [data-theme="dark"] .btn-original:hover {
+            opacity: 1;
         }
 
         .metrics-table {
@@ -360,6 +406,65 @@
             border-color: #0d6efd;
             color: var(--text-primary);
         }
+
+        /* Accordion styles for feature importance */
+        .accordion-item {
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            overflow: hidden;
+            background: white;
+        }
+
+        .accordion-button {
+            background: #f8f9fa;
+            color: #495057;
+            font-weight: 500;
+            padding: 15px 20px;
+        }
+
+        .accordion-button:not(.collapsed) {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            box-shadow: none;
+        }
+
+        .accordion-button:focus {
+            box-shadow: none;
+            border-color: #dee2e6;
+        }
+
+        .accordion-button::after {
+            filter: brightness(0.8);
+        }
+
+        .accordion-button:not(.collapsed)::after {
+            filter: brightness(0) invert(1);
+        }
+
+        .accordion-body {
+            padding: 20px;
+        }
+
+        /* Dark mode for accordion */
+        [data-theme="dark"] .accordion-item {
+            background: var(--card-bg);
+            border-color: var(--border-color);
+        }
+
+        [data-theme="dark"] .accordion-button {
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+        }
+
+        [data-theme="dark"] .accordion-button:not(.collapsed) {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+        }
+
+        [data-theme="dark"] .accordion-body {
+            background: var(--card-bg);
+            color: var(--text-primary);
+        }
 {% endblock %}
 
 {% block content %}
@@ -390,9 +495,15 @@
                             <h1 class="detail-title" id="resultTitle">Rezultato detalės</h1>
                             <div id="resultBadges"></div>
                         </div>
-                        <div>
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-original" id="downloadOriginalBtn">                 
+                                Originalus
+                            </button>
                             <button class="btn download-btn" id="downloadBtn">
-                             Parsisiųsti failą
+                                Imputuotas
+                            </button>
+                            <button class="btn btn-excel" id="downloadTestBtn" style="display: none;">
+                                Palyginimas
                             </button>
                         </div>
                     </div>
@@ -711,10 +822,29 @@ class ResultDetailManager {
                     <span class="status-badge status-${result.busena}">${this.getStatusText(result.busena)}</span>
                 `;
 
-                // Set download button
+                // Set download buttons
+                // Original file download (Excel)
+                document.getElementById('downloadOriginalBtn').onclick = () => {
+                    window.location.href = `/api/rezultatai/${this.resultId}/download-original-xlsx`;
+                };
+
+                // Imputed CSV download
                 document.getElementById('downloadBtn').onclick = () => {
                     window.location.href = `/download/${result.imputuotas_failas}`;
                 };
+
+                // Test comparison Excel download (for Random Forest and XGBoost)
+                const downloadTestBtn = document.getElementById('downloadTestBtn');
+                if ((result.modelio_tipas === 'random_forest' || result.modelio_tipas === 'xgboost') && result.test_predictions) {
+                    // Check if test_predictions has data
+                    const hasPredictions = Object.keys(JSON.parse(result.test_predictions || '{}')).length > 0;
+                    if (hasPredictions) {
+                        downloadTestBtn.style.display = 'inline-block';
+                        downloadTestBtn.onclick = () => {
+                            window.location.href = `/api/rezultatai/${this.resultId}/download-test-comparison`;
+                        };
+                    }
+                }
 
                 // Render info grid
                 this.renderInfoGrid(result);
@@ -726,10 +856,10 @@ class ResultDetailManager {
 
                 // Render feature importance if available
                 if (result.pozymiu_svarba) {
-                    this.renderFeatureImportance(result.pozymiu_svarba);
+                    this.renderFeatureImportance(result.pozymiu_svarba, result.grafikai);
                 }
 
-                // Render plots if available
+                // Render plots if available (excluding feature_importance)
                 if (result.grafikai) {
                     this.renderPlots(result.grafikai);
                 }
@@ -808,10 +938,12 @@ class ResultDetailManager {
                 const metricsContent = document.getElementById('metricsContent');
 
                 let content = '<div class="table-responsive"><table class="table metrics-table">';
-                content += '<thead><tr><th>Stulpelis</th><th>RMSE</th><th>R²</th><th>MAPE (%)</th><th>MAE</th><th>Imties dydis</th><th>Imtis (%)</th></tr></thead><tbody>';
+                content += '<thead><tr><th>Stulpelis</th><th>nRMSE</th><th>R²</th><th>SMAPE (%)</th><th>nMAE</th><th>Imties dydis</th><th>Imtis (%)</th></tr></thead><tbody>';
 
                 for (const [column, data] of Object.entries(metrics)) {
-                    if (data.model_type === 'regression' || data.model_type === 'synthetic_test') {
+                    // Accept all model types that have metrics
+                    // Possible values: 'synthetic_test_no_zeros', 'no_test_nonzero', 'insufficient_data_mean_impute'
+                    if (data && (data.nrmse !== undefined || data.r2 !== undefined)) {
                         // Calculate sample percentage
                         const samplePercent = data.total_samples && data.sample_size
                             ? ((data.sample_size / data.total_samples) * 100).toFixed(1)
@@ -820,10 +952,10 @@ class ResultDetailManager {
                         content += `
                             <tr>
                                 <td><strong>${column}</strong></td>
-                                <td>${data.rmse?.toFixed(4) || 'N/A'}</td>
+                                <td>${data.nrmse?.toFixed(4) || 'N/A'}</td>
                                 <td>${data.r2?.toFixed(4) || 'N/A'}</td>
-                                <td>${data.mape?.toFixed(2) || 'N/A'}</td>
-                                <td>${data.mae?.toFixed(4) || 'N/A'}</td>
+                                <td>${data.smape?.toFixed(2) || 'N/A'}</td>
+                                <td>${data.nmae?.toFixed(4) || 'N/A'}</td>
                                 <td>${data.sample_size || 'N/A'}</td>
                                 <td>${samplePercent}${samplePercent !== 'N/A' ? '%' : ''}</td>
                             </tr>
@@ -836,35 +968,104 @@ class ResultDetailManager {
                 metricsCard.style.display = 'block';
             }
 
-            renderFeatureImportance(importance) {
+            renderFeatureImportance(importance, plots) {
                 const importanceCard = document.getElementById('importanceCard');
                 const importanceContent = document.getElementById('importanceContent');
 
                 let content = '';
+
+                // Create accordion structure
+                content += '<div class="accordion" id="featureImportanceAccordion">';
+
+                let index = 0;
+
+                // Individual indicator accordion items with their own plots
                 for (const [column, features] of Object.entries(importance)) {
-                    content += `<h5>Užpildant stulpelį: ${column}</h5>`;
+                    const accordionId = `collapse${index}`;
+
+                    // Look for individual plot for this column
+                    const plotKey = `feature_importance_${column}`;
+                    const hasPlot = plots && plots[plotKey];
+
+                    content += `
+                        <div class="accordion-item mb-2">
+                            <h2 class="accordion-header" id="heading${index}">
+                                <button class="accordion-button collapsed" type="button"
+                                        data-bs-toggle="collapse" data-bs-target="#${accordionId}"
+                                        aria-expanded="false" aria-controls="${accordionId}">
+                                    <i class="fas fa-chart-line me-2"></i>
+                                    <strong>${column}</strong>
+                                    <span class="badge bg-primary ms-2">${Object.keys(features).length} požymių</span>
+                                </button>
+                            </h2>
+                            <div id="${accordionId}" class="accordion-collapse collapse"
+                                 aria-labelledby="heading${index}" data-bs-parent="#featureImportanceAccordion">
+                                <div class="accordion-body">
+                    `;
+
+                    // Show plot if available
+                    if (hasPlot) {
+                        content += `
+                            <div class="mb-4 text-center">
+                                <h6 class="mb-3">
+                                    <i class="fas fa-chart-bar me-2"></i>
+                                    Požymių svarbos grafikas
+                                </h6>
+                                <img src="data:image/png;base64,${plots[plotKey]}"
+                                     alt="Feature Importance for ${column}"
+                                     class="img-fluid"
+                                     style="max-width: 100%; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                            </div>
+                            <hr class="my-4">
+                        `;
+                    }
+
                     if (features && Object.keys(features).length > 0) {
+                        // Table
+                        content += '<h6 class="mb-3"><i class="fas fa-list-ol me-2"></i>Top 10 požymių svarba:</h6>';
                         content += '<div class="table-responsive"><table class="table metrics-table">';
-                        content += '<thead><tr><th>Požymis</th><th>Svarba</th></tr></thead><tbody>';
+                        content += '<thead><tr><th>#</th><th>Požymis</th><th>Svarba</th><th>Procentas</th></tr></thead><tbody>';
 
                         const sortedFeatures = Object.entries(features)
                             .sort(([,a], [,b]) => b - a)
-                            .slice(0, 10); // Top 10
+                            .slice(0, 10);
 
-                        for (const [feature, value] of sortedFeatures) {
+                        const totalImportance = sortedFeatures.reduce((sum, [, val]) => sum + val, 0);
+
+                        sortedFeatures.forEach(([feature, value], idx) => {
+                            const percentage = ((value / totalImportance) * 100).toFixed(1);
                             content += `
                                 <tr>
-                                    <td>${feature}</td>
+                                    <td><span class="badge bg-secondary">${idx + 1}</span></td>
+                                    <td><strong>${feature}</strong></td>
                                     <td>${value.toFixed(4)}</td>
+                                    <td>
+                                        <div class="progress" style="height: 20px; min-width: 100px;">
+                                            <div class="progress-bar bg-success" role="progressbar"
+                                                 style="width: ${percentage}%"
+                                                 aria-valuenow="${percentage}"
+                                                 aria-valuemin="0" aria-valuemax="100">
+                                                ${percentage}%
+                                            </div>
+                                        </div>
+                                    </td>
                                 </tr>
                             `;
-                        }
+                        });
                         content += '</tbody></table></div>';
                     } else {
                         content += '<p class="text-muted">Požymių svarba nėra prieinama.</p>';
                     }
-                    content += '<hr>';
+
+                    content += `
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    index++;
                 }
+
+                content += '</div>'; // Close accordion
 
                 importanceContent.innerHTML = content;
                 importanceCard.style.display = 'block';
@@ -878,16 +1079,23 @@ class ResultDetailManager {
 
                 const plotTitles = {
                     'comparison': 'Trūkstamų reikšmių palyginimas',
-                    'feature_importance': 'Požymių svarba',
                     'scatter_predictions': 'Faktinių ir prognozuotų reikšmių palyginimas',
                     'performance_table': 'Modelių efektyvumo lentelė',
-                    'rmse_comparison': 'RMSE palyginimas',
+                    'nrmse_comparison': 'nRMSE palyginimas',
+                    'rmse_comparison': 'RMSE palyginimas',  // Legacy support
                     'r2_comparison': 'R² palyginimas',
-                    'mape_comparison': 'MAPE palyginimas',
+                    'smape_comparison': 'SMAPE palyginimas',
+                    'mape_comparison': 'MAPE palyginimas',  // Legacy support
+                    'nmae_comparison': 'nMAE palyginimas',
                     'radar_comparison': 'Bendrasis modelių palyginimas'
                 };
 
                 for (const [plotKey, plotData] of Object.entries(plots)) {
+                    // Skip all feature_importance plots as they're shown in the feature importance section
+                    if (plotKey.startsWith('feature_importance')) {
+                        continue;
+                    }
+
                     const title = plotTitles[plotKey] || plotKey;
                     content += `
                         <div class="plot-container">

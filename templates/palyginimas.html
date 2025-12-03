@@ -517,8 +517,8 @@ class ComparisonManager {
                                     <div class="stat-label">Vid. užpildymas</div>
                                 </div>
                                 <div class="stat-box">
-                                    <div class="stat-value">${stats.vidutinis_rmse.toFixed(4)}</div>
-                                    <div class="stat-label">Vid. RMSE</div>
+                                    <div class="stat-value">${stats.vidutinis_nrmse.toFixed(4)}</div>
+                                    <div class="stat-label">Vid. nRMSE</div>
                                 </div>
                                 <div class="stat-box">
                                     <div class="stat-value">${stats.vidutinis_r2.toFixed(4)}</div>
@@ -618,7 +618,7 @@ class ComparisonManager {
                 const labels = Object.keys(modelStats).map(type =>
                     type === 'random_forest' ? 'Random Forest' : 'XGBoost'
                 );
-                const rmseData = Object.values(modelStats).map(stats => stats.vidutinis_rmse);
+                const nrmseData = Object.values(modelStats).map(stats => stats.vidutinis_nrmse);
 
                 // Check if dark mode is active
                 const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
@@ -630,8 +630,8 @@ class ComparisonManager {
                     data: {
                         labels: labels,
                         datasets: [{
-                            label: 'Vidutinis RMSE',
-                            data: rmseData,
+                            label: 'Vidutinis nRMSE',
+                            data: nrmseData,
                             backgroundColor: ['#007bff', '#dc3545'],
                             borderColor: ['#0056b3', '#a71e2a'],
                             borderWidth: 2
@@ -643,7 +643,7 @@ class ComparisonManager {
                         plugins: {
                             title: {
                                 display: true,
-                                text: 'RMSE palyginimas (mažesnis = geriau)',
+                                text: 'nRMSE palyginimas (mažesnis = geriau)',
                                 color: textColor,
                                 font: {
                                     size: 14,

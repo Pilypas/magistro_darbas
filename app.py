@@ -92,11 +92,12 @@ DB_CONFIG = {
     'user': os.environ.get('MYSQL_USER'),
     'password': os.environ.get('MYSQL_PASSWORD'),
     'database': os.environ.get('MYSQL_DATABASE'),
-    'connect_timeout': 10,
+    'connect_timeout': 30,  # Increased from 10 to 30 seconds
     'ssl_disabled': False,
     'autocommit': True,
     'charset': 'utf8mb4',
-    'collation': 'utf8mb4_unicode_ci'
+    'collation': 'utf8mb4_unicode_ci',
+    'client_flags': [mysql.connector.constants.ClientFlag.MULTI_STATEMENTS]
 }
 
 # Email Configuration
@@ -130,37 +131,171 @@ if not MYSQL_ENABLED:
     print("MySQL environment variables not set - comments feature will be disabled")
     print("Required: MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE")
 
-# Database connection manager
+# Database connection manager with pooling and retry logic
 class DatabaseManager:
-    def __init__(self, config, enabled=True):
-        self.config = config
-        self.connection = None
+    def __init__(self, config, enabled=True, pool_size=20):  # Increased to 20 for large datasets
+        self.config = config.copy()
         self.enabled = enabled
+        self.pool = None
+        self._active_connections = 0
 
-    def get_connection(self):
+        if self.enabled:
+            try:
+                # Create connection pool with larger size for concurrent operations
+                pool_config = self.config.copy()
+                pool_config['pool_name'] = 'mypool'
+                pool_config['pool_size'] = pool_size
+                pool_config['pool_reset_session'] = True
+                # Allow connections to be recycled after use
+                pool_config['autocommit'] = False  # Better control over transactions
+
+                # Create the pool
+                from mysql.connector import pooling
+                self.pool = pooling.MySQLConnectionPool(**pool_config)
+                print(f"MySQL connection pool created with {pool_size} connections")
+            except Error as e:
+                print(f"Failed to create connection pool: {e}")
+                self.pool = None
+
+    def get_connection(self, max_retries=1):  # Reduced retries to avoid piling up
+        """Get a connection from the pool"""
         if not self.enabled:
-            print("MySQL is disabled - environment variables not configured")
+            print("[DB] MySQL is disabled - environment variables not configured")
             return None
 
-        try:
-            # Always create a fresh connection for each request to avoid stale connection issues
-            # This is simpler and more reliable than connection pooling for this use case
-            if self.connection is not None:
-                try:
-                    self.connection.close()
-                except:
-                    pass
-
-            self.connection = mysql.connector.connect(**self.config)
-            return self.connection
-        except Error as e:
-            print(f"Database connection error: {e}")
-            self.connection = None
+        if self.pool is None:
+            print("[DB] Connection pool not available")
             return None
 
-    def close_connection(self):
-        if self.connection and self.connection.is_connected():
-            self.connection.close()
+        for attempt in range(max_retries):
+            try:
+                # Get connection from pool - this will wait if pool is exhausted
+                # But we don't want to wait forever, so it will timeout
+                connection = self.pool.get_connection()
+
+                # Verify connection is alive
+                if connection.is_connected():
+                    # Configure session settings for large data and long operations
+                    try:
+                        cursor = connection.cursor()
+                        # Note: max_allowed_packet is often read-only at session level
+                        # It's configured globally in pool creation or server config
+                        cursor.execute("SET SESSION wait_timeout=600")  # 10 minutes
+                        cursor.execute("SET SESSION net_read_timeout=300")  # 5 minutes
+                        cursor.execute("SET SESSION net_write_timeout=300")  # 5 minutes
+                        cursor.execute("SET SESSION interactive_timeout=600")  # 10 minutes
+                        cursor.close()
+                    except Exception as e:
+                        # Non-critical - continue even if session variables can't be set
+                        pass
+
+                    print(f"[DB] Connection obtained from pool")
+                    return connection
+                else:
+                    print(f"[DB] Connection is not alive, attempting to reconnect...")
+                    # Connection is dead, try to reconnect
+                    try:
+                        connection.reconnect(attempts=2, delay=1)
+                        if connection.is_connected():
+                            print(f"[DB] Reconnection successful")
+                            return connection
+                    except Exception as reconnect_err:
+                        print(f"[DB] Reconnection failed: {reconnect_err}")
+                        pass
+
+            except mysql.connector.errors.PoolError as e:
+                # Pool exhausted - don't retry, just fail fast
+                print(f"[DB] Pool error: {e}")
+                print(f"[DB] Pool status: {self.get_pool_status()}")
+                return None
+
+            except Error as e:
+                print(f"[DB] Connection attempt {attempt + 1}/{max_retries} failed: {e}")
+                if "pool exhausted" in str(e).lower():
+                    # Don't retry on pool exhausted
+                    print(f"[DB] Pool exhausted - not retrying")
+                    return None
+                if attempt < max_retries - 1:
+                    import time
+                    time.sleep(1)  # Wait before retry
+                else:
+                    print(f"[DB] All connection attempts failed")
+                    return None
+
+        return None
+
+    def close_connection(self, connection):
+        """Return connection to pool"""
+        if connection:
+            try:
+                if connection.is_connected():
+                    connection.close()  # Returns to pool, doesn't actually close
+                    print(f"Connection returned to pool")
+            except Exception as e:
+                print(f"Error closing connection: {e}")
+                pass
+
+    def get_pool_status(self):
+        """Get current pool status for debugging"""
+        if self.pool:
+            try:
+                # Try to get pool size info
+                return f"Pool size: {self.pool._pool_size}, Active: {self._active_connections}"
+            except:
+                return "Pool status unavailable"
+        return "No pool"
+
+    def connection(self):
+        """Context manager for automatic connection cleanup"""
+        return DatabaseConnection(self)
+
+
+class DatabaseConnection:
+    """Context manager for database connections"""
+    def __init__(self, db_manager):
+        self.db_manager = db_manager
+        self.connection = None
+        self.cursor = None
+
+    def __enter__(self):
+        """Get connection when entering context"""
+        self.connection = self.db_manager.get_connection()
+        if self.connection:
+            print(f"[DB] Connection acquired from pool")
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Cleanup when exiting context"""
+        if self.cursor:
+            try:
+                self.cursor.close()
+                print(f"[DB] Cursor closed")
+            except:
+                pass
+
+        if self.connection:
+            try:
+                if exc_type:
+                    # Rollback on error
+                    self.connection.rollback()
+                    print(f"[DB] Transaction rolled back due to error: {exc_val}")
+                else:
+                    # Commit on success
+                    self.connection.commit()
+                    print(f"[DB] Transaction committed")
+
+                self.db_manager.close_connection(self.connection)
+            except Exception as e:
+                print(f"[DB] Error during cleanup: {e}")
+
+        return False  # Don't suppress exceptions
+
+    def get_cursor(self, dictionary=False):
+        """Get a cursor for this connection"""
+        if self.connection:
+            self.cursor = self.connection.cursor(dictionary=dictionary)
+            return self.cursor
+        return None
 
 # Initialize database manager - only if MySQL is properly configured
 db_manager = DatabaseManager(DB_CONFIG, enabled=MYSQL_ENABLED)
@@ -172,88 +307,89 @@ def init_database_tables():
         return
 
     try:
-        connection = db_manager.get_connection()
-        if not connection:
-            return
+        print("[DB] Initializing database tables...")
+        with db_manager.connection() as db_conn:
+            if not db_conn.connection:
+                print("[DB] Failed to get connection for table initialization")
+                return
 
-        cursor = connection.cursor()
+            cursor = db_conn.get_cursor()
 
-        # Create imputacijos_rezultatai table
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS imputacijos_rezultatai (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                rezultato_id VARCHAR(36) UNIQUE NOT NULL,
-                originalus_failas VARCHAR(255) NOT NULL,
-                imputuotas_failas VARCHAR(255) NOT NULL,
-                modelio_tipas ENUM('random_forest', 'xgboost') NOT NULL,
-                n_estimators INT NOT NULL,
-                random_state INT NOT NULL,
-                max_depth INT DEFAULT NULL,
-                learning_rate FLOAT DEFAULT NULL,
-                originalus_trukstamu_kiekis INT NOT NULL,
-                imputuotas_trukstamu_kiekis INT NOT NULL,
-                apdorotu_stulpeliu_kiekis INT NOT NULL,
-                modelio_metrikos JSON,
-                pozymiu_svarba JSON,
-                grafikai JSON,
-                test_predictions JSON,
-                sukurimo_data DATETIME DEFAULT CURRENT_TIMESTAMP,
-                busena ENUM('vykdomas', 'baigtas', 'klaida') DEFAULT 'vykdomas'
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-        """)
-
-        # Add test_predictions column if it doesn't exist (for existing tables)
-        cursor.execute("""
-            SELECT COUNT(*) as count
-            FROM information_schema.COLUMNS
-            WHERE TABLE_SCHEMA = DATABASE()
-            AND TABLE_NAME = 'imputacijos_rezultatai'
-            AND COLUMN_NAME = 'test_predictions'
-        """)
-        result = cursor.fetchone()
-        if result[0] == 0:  # Use index instead of key since cursor is not dictionary type
+            # Create imputacijos_rezultatai table
             cursor.execute("""
-                ALTER TABLE imputacijos_rezultatai
-                ADD COLUMN test_predictions JSON AFTER grafikai
+                CREATE TABLE IF NOT EXISTS imputacijos_rezultatai (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    rezultato_id VARCHAR(36) UNIQUE NOT NULL,
+                    originalus_failas VARCHAR(255) NOT NULL,
+                    imputuotas_failas VARCHAR(255) NOT NULL,
+                    modelio_tipas ENUM('random_forest', 'xgboost') NOT NULL,
+                    n_estimators INT NOT NULL,
+                    random_state INT NOT NULL,
+                    max_depth INT DEFAULT NULL,
+                    learning_rate FLOAT DEFAULT NULL,
+                    originalus_trukstamu_kiekis INT NOT NULL,
+                    imputuotas_trukstamu_kiekis INT NOT NULL,
+                    apdorotu_stulpeliu_kiekis INT NOT NULL,
+                    modelio_metrikos JSON,
+                    pozymiu_svarba JSON,
+                    grafikai JSON,
+                    test_predictions JSON,
+                    sukurimo_data DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    busena ENUM('vykdomas', 'baigtas', 'klaida') DEFAULT 'vykdomas'
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
             """)
 
-        # Create rezultatu_komentarai table (separate from general komentarai)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS rezultatu_komentarai (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                komentaro_id VARCHAR(36) UNIQUE NOT NULL,
-                rezultato_id VARCHAR(36) NOT NULL,
-                vardas VARCHAR(100) NOT NULL,
-                komentaras TEXT NOT NULL,
-                sukurimo_data DATETIME DEFAULT CURRENT_TIMESTAMP,
-                INDEX idx_rezultato_id (rezultato_id),
-                FOREIGN KEY (rezultato_id) REFERENCES imputacijos_rezultatai(rezultato_id) ON DELETE CASCADE
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-        """)
-
-        # Add max_depth and learning_rate columns if they don't exist (for existing tables)
-        try:
+            # Add test_predictions column if it doesn't exist (for existing tables)
             cursor.execute("""
-                ALTER TABLE imputacijos_rezultatai
-                ADD COLUMN max_depth INT DEFAULT NULL AFTER random_state
+                SELECT COUNT(*) as count
+                FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                AND TABLE_NAME = 'imputacijos_rezultatai'
+                AND COLUMN_NAME = 'test_predictions'
             """)
-        except:
-            pass  # Column already exists
+            result = cursor.fetchone()
+            if result[0] == 0:  # Use index instead of key since cursor is not dictionary type
+                cursor.execute("""
+                    ALTER TABLE imputacijos_rezultatai
+                    ADD COLUMN test_predictions JSON AFTER grafikai
+                """)
 
-        try:
+            # Create rezultatu_komentarai table (separate from general komentarai)
             cursor.execute("""
-                ALTER TABLE imputacijos_rezultatai
-                ADD COLUMN learning_rate FLOAT DEFAULT NULL AFTER max_depth
+                CREATE TABLE IF NOT EXISTS rezultatu_komentarai (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    komentaro_id VARCHAR(36) UNIQUE NOT NULL,
+                    rezultato_id VARCHAR(36) NOT NULL,
+                    vardas VARCHAR(100) NOT NULL,
+                    komentaras TEXT NOT NULL,
+                    sukurimo_data DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    INDEX idx_rezultato_id (rezultato_id),
+                    FOREIGN KEY (rezultato_id) REFERENCES imputacijos_rezultatai(rezultato_id) ON DELETE CASCADE
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
             """)
-        except:
-            pass  # Column already exists
 
-        cursor.close()
-        connection.commit()
-        print("Database tables initialized successfully")
+            # Add max_depth and learning_rate columns if they don't exist (for existing tables)
+            try:
+                cursor.execute("""
+                    ALTER TABLE imputacijos_rezultatai
+                    ADD COLUMN max_depth INT DEFAULT NULL AFTER random_state
+                """)
+            except:
+                pass  # Column already exists
+
+            try:
+                cursor.execute("""
+                    ALTER TABLE imputacijos_rezultatai
+                    ADD COLUMN learning_rate FLOAT DEFAULT NULL AFTER max_depth
+                """)
+            except:
+                pass  # Column already exists
+
+            print("[DB] Database tables initialized successfully")
+            # Context manager will automatically commit and close
 
     except Error as e:
-        print(f"Error initializing database tables: {e}")
+        print(f"[DB] Error initializing database tables: {e}")
 
 # Initialize tables on startup
 init_database_tables()
@@ -263,12 +399,13 @@ class MLImputer:
     """Wrapper klasė, kuri pasirenka tinkamą modelį pagal model_type"""
 
     def __init__(self, model_type='random_forest', n_estimators=100, random_state=42,
-                 max_depth=None, learning_rate=None):
+                 max_depth=None, learning_rate=None, exclude_columns=None):
         self.model_type = model_type
         self.n_estimators = n_estimators
         self.random_state = random_state
         self.max_depth = max_depth
         self.learning_rate = learning_rate
+        self.exclude_columns = exclude_columns or []
 
         # Inicijuojame tinkamą modelį
         if model_type == 'xgboost' and XGBOOST_IMPUTER_AVAILABLE:
@@ -276,7 +413,8 @@ class MLImputer:
                 # XGBoost specific parameters
                 xgb_params = {
                     'n_estimators': n_estimators,
-                    'random_state': random_state
+                    'random_state': random_state,
+                    'exclude_columns': self.exclude_columns
                 }
                 if max_depth is not None:
                     xgb_params['max_depth'] = max_depth
@@ -288,7 +426,8 @@ class MLImputer:
                 # Bet kokios klaidos - naudojame Random Forest
                 rf_params = {
                     'n_estimators': n_estimators,
-                    'random_state': random_state
+                    'random_state': random_state,
+                    'exclude_columns': self.exclude_columns
                 }
                 if max_depth is not None:
                     rf_params['max_depth'] = max_depth
@@ -301,7 +440,8 @@ class MLImputer:
 
             rf_params = {
                 'n_estimators': n_estimators,
-                'random_state': random_state
+                'random_state': random_state,
+                'exclude_columns': self.exclude_columns
             }
             if max_depth is not None:
                 rf_params['max_depth'] = max_depth
@@ -392,10 +532,10 @@ def get_uploaded_files():
                         upload_date = datetime.fromtimestamp(file_stat.st_mtime)
 
                         # Check if file has time_period column
-                        has_time_data = 'time_period' in df.columns
+                        has_time_data = 'year' in df.columns
                         year_range = None
                         if has_time_data:
-                            years = df['time_period'].dropna().unique()
+                            years = df['year'].dropna().unique()
                             if len(years) > 0:
                                 year_range = f"{int(min(years))} - {int(max(years))}"
 
@@ -484,75 +624,84 @@ def get_rezultatas(result_id):
     if not MYSQL_ENABLED:
         return jsonify({"error": "Rezultatų funkcija neprieinama - duomenų bazė nesukonfigūruota"}), 503
 
-    cursor = None
     try:
-        connection = db_manager.get_connection()
-        if not connection:
-            print(f"Failed to get database connection for result {result_id}")
-            return jsonify({"error": "Nepavyko prisijungti prie duomenų bazės"}), 500
+        print(f"[API] Fetching result: {result_id}")
 
-        cursor = connection.cursor(dictionary=True)
+        with db_manager.connection() as db_conn:
+            if not db_conn.connection:
+                print(f"[API] Failed to get database connection for result {result_id}")
+                return jsonify({"error": "Nepavyko prisijungti prie duomenų bazės"}), 500
 
-        # Use longer timeout for large responses
-        if connection:
+            cursor = db_conn.get_cursor(dictionary=True)
+
+            # Use longer timeout for large responses
             try:
                 cursor.execute("SET SESSION MAX_EXECUTION_TIME=60000")  # 60 seconds
             except:
                 pass  # Ignore if not supported
 
-        cursor.execute("""
-            SELECT * FROM imputacijos_rezultatai
-            WHERE rezultato_id = %s
-        """, (result_id,))
+            cursor.execute("""
+                SELECT * FROM imputacijos_rezultatai
+                WHERE rezultato_id = %s
+            """, (result_id,))
 
-        rezultatas = cursor.fetchone()
+            rezultatas = cursor.fetchone()
 
-        if not rezultatas:
-            print(f"Result not found: {result_id}")
-            return jsonify({"error": "Rezultatas nerastas"}), 404
+            if not rezultatas:
+                print(f"[API] Result not found: {result_id}")
+                return jsonify({"error": "Rezultatas nerastas"}), 404
 
-        # Parse JSON fields with error handling
-        try:
-            if rezultatas['modelio_metrikos']:
-                rezultatas['modelio_metrikos'] = json_module.loads(rezultatas['modelio_metrikos'])
-        except Exception as e:
-            print(f"Error parsing modelio_metrikos: {e}")
-            rezultatas['modelio_metrikos'] = None
+            print(f"[API] Result found, parsing JSON fields...")
 
-        try:
-            if rezultatas['pozymiu_svarba']:
-                rezultatas['pozymiu_svarba'] = json_module.loads(rezultatas['pozymiu_svarba'])
-        except Exception as e:
-            print(f"Error parsing pozymiu_svarba: {e}")
-            rezultatas['pozymiu_svarba'] = None
+            # Parse JSON fields with error handling
+            try:
+                if rezultatas['modelio_metrikos']:
+                    rezultatas['modelio_metrikos'] = json_module.loads(rezultatas['modelio_metrikos'])
+                    print(f"[API] Parsed modelio_metrikos: {len(rezultatas['modelio_metrikos'])} columns")
+                else:
+                    print(f"[API] No modelio_metrikos data")
+            except Exception as e:
+                print(f"[API] Error parsing modelio_metrikos: {e}")
+                rezultatas['modelio_metrikos'] = None
 
-        try:
-            if rezultatas['grafikai']:
-                rezultatas['grafikai'] = json_module.loads(rezultatas['grafikai'])
-        except Exception as e:
-            print(f"Error parsing grafikai: {e}")
-            rezultatas['grafikai'] = None
+            try:
+                if rezultatas['pozymiu_svarba']:
+                    rezultatas['pozymiu_svarba'] = json_module.loads(rezultatas['pozymiu_svarba'])
+                    print(f"[API] Parsed pozymiu_svarba: {len(rezultatas['pozymiu_svarba'])} columns")
+                else:
+                    print(f"[API] No pozymiu_svarba data")
+            except Exception as e:
+                print(f"[API] Error parsing pozymiu_svarba: {e}")
+                rezultatas['pozymiu_svarba'] = None
 
-        return jsonify({"rezultatas": rezultatas})
+            try:
+                if rezultatas['grafikai']:
+                    grafikai_data = json_module.loads(rezultatas['grafikai'])
+                    rezultatas['grafikai'] = grafikai_data
+                    print(f"[API] Parsed grafikai: {len(grafikai_data)} plots")
+                else:
+                    print(f"[API] No grafikai data")
+                    rezultatas['grafikai'] = {}
+            except Exception as e:
+                print(f"[API] Error parsing grafikai: {e}")
+                import traceback
+                traceback.print_exc()
+                rezultatas['grafikai'] = {}
+
+            print(f"[API] Returning result data")
+            return jsonify({"rezultatas": rezultatas})
 
     except Error as e:
-        print(f"Database error in get_rezultatas: {str(e)}")
+        print(f"[API] Database error in get_rezultatas: {str(e)}")
         import traceback
         traceback.print_exc()
         return jsonify({"error": f"Duomenų bazės klaida: {str(e)}"}), 500
 
     except Exception as e:
-        print(f"Unexpected error in get_rezultatas: {str(e)}")
+        print(f"[API] Unexpected error in get_rezultatas: {str(e)}")
         import traceback
         traceback.print_exc()
         return jsonify({"error": f"Serverio klaida: {str(e)}"}), 500
-
-    finally:
-        if cursor:
-            try:
-                cursor.close()
-            except:
-                pass
 
 @app.route('/api/comments/<result_id>', methods=['GET'])
 def get_comments(result_id):
@@ -763,15 +912,15 @@ def generate_result_pdf(rezultatas):
 
         if regression_metrics:
 
-                metrics_data = [['Stulpelis', 'RMSE', 'R²', 'MAPE (%)', 'MAE', 'Imties dydis']]
+                metrics_data = [['Stulpelis', 'nRMSE', 'R²', 'SMAPE (%)', 'nMAE', 'Imties dydis']]
 
                 for col, m in regression_metrics.items():
                     metrics_data.append([
                         col,
-                        f"{m.get('rmse', 0):.4f}",
+                        f"{m.get('nrmse', 0):.4f}",
                         f"{m.get('r2', 0):.4f}",
-                        f"{m.get('mape', 0):.2f}",
-                        f"{m.get('mae', 0):.4f}",
+                        f"{m.get('smape', 0):.2f}",
+                        f"{m.get('nmae', 0):.4f}",
                         str(m.get('sample_size', 0))
                     ])
 
@@ -851,9 +1000,9 @@ def generate_result_pdf(rezultatas):
                     plot_titles = {
                         'scatter_predictions': 'Faktinių ir prognozuotų reikšmių palyginimas',
                         'performance_table': 'Modelių efektyvumo lentelė',
-                        'rmse_comparison': 'RMSE palyginimas',
+                        'rmse_comparison': 'nRMSE palyginimas',
                         'r2_comparison': 'R² palyginimas',
-                        'mape_comparison': 'MAPE palyginimas',
+                        'mape_comparison': 'SMAPE palyginimas',
                         'radar_comparison': 'Bendrasis modelių palyginimas'
                     }
 
@@ -1251,7 +1400,7 @@ def generate_comparison_data(results):
             model_stats[model_type] = {
                 "kiekis": 0,
                 "vidutinis_uzpildymas": 0,
-                "vidutinis_rmse": 0,
+                "vidutinis_nrmse": 0,
                 "vidutinis_r2": 0,
                 "vidutinis_laikas": 0
             }
@@ -1262,16 +1411,16 @@ def generate_comparison_data(results):
 
         # Calculate average metrics from model_metrics
         if result['modelio_metrikos']:
-            rmse_values = []
+            nrmse_values = []
             r2_values = []
             for col_metrics in result['modelio_metrikos'].values():
-                if col_metrics.get('rmse'):
-                    rmse_values.append(col_metrics['rmse'])
+                if col_metrics.get('nrmse'):
+                    nrmse_values.append(col_metrics['nrmse'])
                 if col_metrics.get('r2'):
                     r2_values.append(col_metrics['r2'])
 
-            if rmse_values:
-                model_stats[model_type]["vidutinis_rmse"] += sum(rmse_values) / len(rmse_values)
+            if nrmse_values:
+                model_stats[model_type]["vidutinis_nrmse"] += sum(nrmse_values) / len(nrmse_values)
             if r2_values:
                 model_stats[model_type]["vidutinis_r2"] += sum(r2_values) / len(r2_values)
 
@@ -1279,7 +1428,7 @@ def generate_comparison_data(results):
     for model_type, stats in model_stats.items():
         if stats["kiekis"] > 0:
             stats["vidutinis_uzpildymas"] /= stats["kiekis"]
-            stats["vidutinis_rmse"] /= stats["kiekis"]
+            stats["vidutinis_nrmse"] /= stats["kiekis"]
             stats["vidutinis_r2"] /= stats["kiekis"]
 
     comparison["modeliu_palyginimas"] = model_stats
@@ -1296,7 +1445,7 @@ def calculate_efficiency_indicators(results):
     """Calculate efficiency indicators for comparison"""
     indicators = {
         "geriausias_uzpildymas": None,
-        "geriausias_rmse": None,
+        "geriausias_nrmse": None,
         "geriausias_r2": None,
         "greičiausias": None
     }
@@ -1672,7 +1821,7 @@ def get_rezultato_kde(result_id, indicator_name):
                     "mean_difference": round(abs(imputed_mean - original_mean), 4),
                     "original_std": round(original_std, 4),
                     "imputed_std": round(imputed_std, 4),
-                    "test_set_percentage": 20  # Typically 20% for test set
+                    "test_set_percentage": 30  # Typically 20% for test set
                 }
             })
 
@@ -1834,7 +1983,7 @@ def analyze_data(filename):
         plt.tight_layout()
         
         img_buffer = io.BytesIO()
-        plt.savefig(img_buffer, format='png', dpi=150, bbox_inches='tight')
+        plt.savefig(img_buffer, format='png', dpi=80, bbox_inches='tight')
         img_buffer.seek(0)
         plots['missing_heatmap'] = base64.b64encode(img_buffer.getvalue()).decode()
         plt.close()
@@ -1853,7 +2002,7 @@ def analyze_data(filename):
             plt.tight_layout()
             
             img_buffer = io.BytesIO()
-            plt.savefig(img_buffer, format='png', dpi=150, bbox_inches='tight')
+            plt.savefig(img_buffer, format='png', dpi=80, bbox_inches='tight')
             img_buffer.seek(0)
             plots['missing_bar'] = base64.b64encode(img_buffer.getvalue()).decode()
             plt.close()
@@ -1868,7 +2017,7 @@ def analyze_data(filename):
             plt.tight_layout()
             
             img_buffer = io.BytesIO()
-            plt.savefig(img_buffer, format='png', dpi=150, bbox_inches='tight')
+            plt.savefig(img_buffer, format='png', dpi=80, bbox_inches='tight')
             img_buffer.seek(0)
             plots['correlation'] = base64.b64encode(img_buffer.getvalue()).decode()
             plt.close()
@@ -1884,7 +2033,7 @@ def analyze_data(filename):
             missing_percent = round((missing_count / len(df)) * 100, 2)
 
             # Include columns with missing values OR special columns (time_period, geo)
-            if missing_count > 0 or col in ['time_period', 'geo']:
+            if missing_count > 0 or col in ['year', 'geo']:
                 missing_by_column.append({
                     "column": col,
                     "missing_count": int(missing_count),
@@ -1895,7 +2044,7 @@ def analyze_data(filename):
 
         # Sort: columns by missing percentage (highest first), then special columns (time_period, geo) at the end
         def sort_key(item):
-            if item['column'] == 'time_period':
+            if item['column'] == 'year':
                 return (1, 0)  # Second to last
             elif item['column'] == 'geo':
                 return (1, 1)  # Last
@@ -1906,14 +2055,14 @@ def analyze_data(filename):
 
         # Analyze missing values over time (if time_period column exists)
         missing_over_time = None
-        if 'time_period' in df.columns:
-            # Get all numeric/indicator columns (exclude geo and time_period)
+        if 'year' in df.columns:
+            # Get all numeric/indicator columns (exclude geo and year)
             indicator_columns = [col for col in df.columns
-                               if col not in ['geo', 'time_period']
+                               if col not in ['geo', 'year']
                                and df[col].dtype in ['float64', 'int64', 'float32', 'int32']]
 
             # Get unique years
-            years = sorted(df['time_period'].dropna().unique().tolist())
+            years = sorted(df['year'].dropna().unique().tolist())
 
             missing_over_time = {
                 'years': years,
@@ -1922,7 +2071,7 @@ def analyze_data(filename):
             }
 
             for year in years:
-                year_data = df[df['time_period'] == year]
+                year_data = df[df['year'] == year]
                 total_missing = 0
 
                 for indicator in indicator_columns:
@@ -1989,56 +2138,119 @@ def get_csv_data(filename):
 def save_imputation_result(filename, imputed_filename, model_type, n_estimators, random_state,
                           original_missing, imputed_missing, plots, feature_importance, model_metrics,
                           max_depth=None, learning_rate=None, test_predictions=None):
-    """Save imputation result to database"""
+    """Save imputation result to database with retry logic and automatic connection cleanup"""
     if not MYSQL_ENABLED:
         return None
 
-    try:
-        connection = db_manager.get_connection()
-        if not connection:
+    max_retries = 3
+    result_id = str(uuid.uuid4())
+
+    # Prepare JSON data BEFORE getting connection to minimize connection hold time
+    print("[DB] Preparing JSON data for database...")
+    plots_json = json_module.dumps(plots) if plots else None
+    metrics_json = json_module.dumps(model_metrics) if model_metrics else None
+    importance_json = json_module.dumps(feature_importance) if feature_importance else None
+    predictions_json = json_module.dumps(test_predictions) if test_predictions else None
+
+    # Log data sizes
+    total_size = 0
+    if plots_json:
+        size = len(plots_json) / 1024
+        print(f"  Plots JSON size: {size:.2f} KB")
+        total_size += size
+    if metrics_json:
+        size = len(metrics_json) / 1024
+        print(f"  Metrics JSON size: {size:.2f} KB")
+        total_size += size
+    if importance_json:
+        size = len(importance_json) / 1024
+        print(f"  Importance JSON size: {size:.2f} KB")
+        total_size += size
+    if predictions_json:
+        size = len(predictions_json) / 1024
+        print(f"  Predictions JSON size: {size:.2f} KB")
+        total_size += size
+
+    print(f"  Total JSON size: {total_size:.2f} KB ({total_size/1024:.2f} MB)")
+
+    for attempt in range(max_retries):
+        try:
+            print(f"[DB] Attempt {attempt + 1}/{max_retries} to save to database")
+            print(f"[DB] Pool status: {db_manager.get_pool_status()}")
+
+            # Use context manager to ensure connection is always released
+            with db_manager.connection() as db_conn:
+                if not db_conn.connection:
+                    print(f"[DB] Failed to get connection from pool")
+                    if attempt < max_retries - 1:
+                        import time
+                        time.sleep(2)
+                        continue
+                    return None
+
+                cursor = db_conn.get_cursor()
+
+                print(f"[DB] Inserting data into database...")
+                cursor.execute("""
+                    INSERT INTO imputacijos_rezultatai (
+                        rezultato_id, originalus_failas, imputuotas_failas,
+                        modelio_tipas, n_estimators, random_state, max_depth, learning_rate,
+                        originalus_trukstamu_kiekis, imputuotas_trukstamu_kiekis,
+                        apdorotu_stulpeliu_kiekis, modelio_metrikos,
+                        pozymiu_svarba, grafikai, test_predictions, busena
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """, (
+                    result_id, filename, imputed_filename, model_type,
+                    n_estimators, random_state, max_depth, learning_rate,
+                    original_missing, imputed_missing,
+                    len(feature_importance) if feature_importance else 0,
+                    metrics_json, importance_json, plots_json, predictions_json,
+                    'baigtas'
+                ))
+
+                print(f"[DB] Data successfully saved with result_id: {result_id}")
+                # Context manager will automatically commit and close
+
+            return result_id
+
+        except Error as e:
+            print(f"[DB] Attempt {attempt + 1}/{max_retries} - MySQL Error: {e}")
+            import traceback
+            traceback.print_exc()
+
+            if attempt < max_retries - 1:
+                print(f"[DB] Retrying in 2 seconds...")
+                import time
+                time.sleep(2)
+            else:
+                print(f"[DB] All {max_retries} attempts failed")
+                return None
+
+        except Exception as e:
+            print(f"[DB] Unexpected error: {e}")
+            import traceback
+            traceback.print_exc()
             return None
 
-        result_id = str(uuid.uuid4())
-
-        cursor = connection.cursor()
-        cursor.execute("""
-            INSERT INTO imputacijos_rezultatai (
-                rezultato_id, originalus_failas, imputuotas_failas,
-                modelio_tipas, n_estimators, random_state, max_depth, learning_rate,
-                originalus_trukstamu_kiekis, imputuotas_trukstamu_kiekis,
-                apdorotu_stulpeliu_kiekis, modelio_metrikos,
-                pozymiu_svarba, grafikai, test_predictions, busena
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-        """, (
-            result_id, filename, imputed_filename, model_type,
-            n_estimators, random_state, max_depth, learning_rate,
-            original_missing, imputed_missing,
-            len(feature_importance) if feature_importance else 0,
-            json_module.dumps(model_metrics) if model_metrics else None,
-            json_module.dumps(feature_importance) if feature_importance else None,
-            json_module.dumps(plots) if plots else None,
-            json_module.dumps(test_predictions) if test_predictions else None,
-            'baigtas'
-        ))
-
-        connection.commit()
-        cursor.close()
-
-        return result_id
-
-    except Error as e:
-        print(f"Error saving imputation result: {e}")
-        return None
+    return None
 
 @app.route('/impute/<filename>', methods=['POST'])
 def impute_missing_values(filename):
     try:
+        print(f"\n{'='*80}")
+        print(f"Starting imputation for file: {filename}")
+        print(f"{'='*80}")
+
         filepath = os.path.join(UPLOAD_FOLDER, secure_filename(filename))
         if not os.path.exists(filepath):
             return jsonify({"error": "Failas nerastas"}), 404
 
+        print("Loading CSV file...")
         df = pd.read_csv(filepath)
+        print(f"File loaded: {len(df)} rows, {len(df.columns)} columns")
+
         original_missing = df.isnull().sum().sum()
+        print(f"Missing values: {original_missing}")
 
         if original_missing == 0:
             return jsonify({"message": "Nėra trūkstamų reikšmių užpildymui"}), 400
@@ -2050,16 +2262,24 @@ def impute_missing_values(filename):
         random_state = data.get('random_state', 42)
         max_depth = data.get('max_depth', None)  # None = automatic
         learning_rate = data.get('learning_rate', None)  # For XGBoost only
+        exclude_columns = data.get('exclude_columns', [])  # Columns to exclude from imputation
+
+        print(f"Model type: {model_type}, n_estimators: {n_estimators}")
+        if exclude_columns:
+            print(f"Excluded columns ({len(exclude_columns)}): {exclude_columns}")
 
         # Perform imputation with all parameters
+        print("Starting imputation process...")
         imputer = MLImputer(
             model_type=model_type,
             n_estimators=n_estimators,
             random_state=random_state,
             max_depth=max_depth,
-            learning_rate=learning_rate
+            learning_rate=learning_rate,
+            exclude_columns=exclude_columns
         )
         df_imputed = imputer.fit_transform(df)
+        print("Imputation completed!")
 
         # Generate unique filename for imputed data
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -2104,16 +2324,23 @@ def impute_missing_values(filename):
 
         plt.tight_layout()
         img_buffer = io.BytesIO()
-        plt.savefig(img_buffer, format='png', dpi=150, bbox_inches='tight')
+        plt.savefig(img_buffer, format='png', dpi=80, bbox_inches='tight')
         img_buffer.seek(0)
         plots['comparison'] = base64.b64encode(img_buffer.getvalue()).decode()
         plt.close()
+        print("Comparison plot generated")
 
         # Feature importance plots - generate individual plot for each column
+        print("Generating feature importance plots...")
         feature_importance = imputer.get_feature_importance()
         if feature_importance:
+            print(f"Found {len(feature_importance)} columns with feature importance")
+            plot_count = 0
             for col, importance in feature_importance.items():
                 if importance:
+                    plot_count += 1
+                    print(f"  Generating plot {plot_count}/{len(feature_importance)} for {col}...")
+
                     # Sort by importance (descending)
                     sorted_importance = dict(sorted(importance.items(), key=lambda x: x[1], reverse=True))
 
@@ -2140,14 +2367,18 @@ def impute_missing_values(filename):
                     plt.tight_layout()
 
                     img_buffer = io.BytesIO()
-                    plt.savefig(img_buffer, format='png', dpi=150, bbox_inches='tight')
+                    plt.savefig(img_buffer, format='png', dpi=80, bbox_inches='tight')
                     img_buffer.seek(0)
 
                     # Store with column-specific key
                     plots[f'feature_importance_{col}'] = base64.b64encode(img_buffer.getvalue()).decode()
                     plt.close()
+            print(f"Feature importance plots completed ({plot_count} plots)")
+        else:
+            print("No feature importance data found")
 
         # Generate model performance plots
+        print("Generating model performance plots...")
         model_metrics = imputer.get_model_metrics()
 
         # Add per-column missing data information to metrics
@@ -2167,11 +2398,14 @@ def impute_missing_values(filename):
 
         performance_plots = generate_model_performance_plots(model_metrics)
         plots.update(performance_plots)
+        print("Model performance plots generated")
 
         # Generate scatter plots for actual vs predicted values
+        print("Generating scatter plots...")
         test_predictions = imputer.get_test_predictions()
         scatter_plots = generate_scatter_plots(test_predictions, model_type)
         plots.update(scatter_plots)
+        print("Scatter plots generated")
 
         # Convert test_predictions numpy arrays to lists for JSON serialization
         test_predictions_serializable = {}
@@ -2188,20 +2422,38 @@ def impute_missing_values(filename):
                     print(f"Warning: Skipping {column_name} - invalid test prediction format: {type(pred_data)}")
                     print(f"pred_data content: {pred_data}")
 
-        # Save result to database
-        result_id = save_imputation_result(
-            filename, imputed_filename, model_type, n_estimators, random_state,
-            int(original_missing), int(df_imputed.isnull().sum().sum()),
-            plots, feature_importance, model_metrics,
-            max_depth, learning_rate, test_predictions_serializable
-        )
+        # Save result to database (skip if disabled for testing)
+        result_id = None
+        SKIP_DB_SAVE = os.environ.get('SKIP_DB_SAVE', 'false').lower() == 'true'
 
+        if not SKIP_DB_SAVE:
+            print("Saving results to database...")
+            try:
+                result_id = save_imputation_result(
+                    filename, imputed_filename, model_type, n_estimators, random_state,
+                    int(original_missing), int(df_imputed.isnull().sum().sum()),
+                    plots, feature_importance, model_metrics,
+                    max_depth, learning_rate, test_predictions_serializable
+                )
+                if result_id:
+                    print(f"Results saved with ID: {result_id}")
+                else:
+                    print("Warning: Failed to save results to database")
+            except Exception as db_error:
+                print(f"Database save failed: {db_error}")
+                print("Continuing without database save...")
+        else:
+            print("Database save skipped (SKIP_DB_SAVE=true)")
+
+        print("Preparing response data...")
+        # Don't send plots in response - too large for big datasets
+        # Plots are saved in database and will be loaded separately
         response_data = {
             "message": "Užpildymas sėkmingai baigtas",
             "imputed_filename": imputed_filename,
             "original_missing": int(original_missing),
             "imputed_missing": int(df_imputed.isnull().sum().sum()),
-            "plots": plots,
+            "plots": {},  # Empty - load from DB instead
             "feature_importance": feature_importance,
             "model_metrics": model_metrics,
             "model_type": model_type
@@ -2209,10 +2461,29 @@ def impute_missing_values(filename):
 
         if result_id:
             response_data["result_id"] = result_id
+            print(f"Results saved with ID: {result_id}")
+            print("Plots stored in database - will be loaded separately")
+
+        # Log response size
+        import sys
+        response_size = sys.getsizeof(str(response_data))
+        print(f"Response data size (without plots): {response_size / 1024:.2f} KB")
+        print(f"Number of plots generated: {len(plots)}")
+        print(f"{'='*80}")
+        print("Imputation completed successfully!")
+        print(f"{'='*80}\n")
 
         return jsonify(response_data)
 
     except Exception as e:
+        import traceback
+        print(f"\n{'='*80}")
+        print("ERROR during imputation:")
+        print(f"{'='*80}")
+        print(f"Error message: {str(e)}")
+        print("Traceback:")
+        traceback.print_exc()
+        print(f"{'='*80}\n")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/download/<path:filename>')
@@ -2449,7 +2720,7 @@ def download_test_comparison_excel(result_id):
 
         # Generate filename
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"test_comparison_{result['modelio_tipas']}_{timestamp}.xlsx"
+        filename = f"imputed_palyginimas_{result['modelio_tipas']}_{timestamp}.xlsx"
 
         return send_file(
             excel_file,
@@ -2635,7 +2906,7 @@ def generate_scatter_plots(test_predictions, model_type):
     plt.tight_layout()
 
     img_buffer = io.BytesIO()
-    plt.savefig(img_buffer, format='png', dpi=150, bbox_inches='tight')
+    plt.savefig(img_buffer, format='png', dpi=80, bbox_inches='tight')
     img_buffer.seek(0)
     plots['scatter_predictions'] = base64.b64encode(img_buffer.getvalue()).decode()
     plt.close()
@@ -2646,18 +2917,22 @@ def generate_model_performance_plots(model_metrics):
     """Generate comprehensive model performance visualization plots"""
     plots = {}
 
-    # Filter only regression/synthetic_test models with metrics
+    # Filter models with metrics (accept all model_type values that have nrmse or r2)
+    # Possible model_type values: 'synthetic_test_no_zeros', 'no_test_nonzero', 'insufficient_data_mean_impute'
     regression_metrics = {col: metrics for col, metrics in model_metrics.items()
-                         if metrics.get('model_type') in ['regression', 'synthetic_test'] and 'rmse' in metrics}
-    
+                         if metrics and ('nrmse' in metrics or 'r2' in metrics)}
+
     if not regression_metrics:
+        print("[Plots] No regression metrics found to plot")
         return plots
-    
+
+    print(f"[Plots] Generating performance plots for {len(regression_metrics)} columns")
+
     # 1. Model Performance Summary Table Plot
     fig, ax = plt.subplots(figsize=(14, max(6, len(regression_metrics) * 0.8)))
-    
-    # Prepare data for table
-    columns = ['Stulpelis', 'RMSE', 'R²', 'MAPE (%)', 'MAE', 'Imties dydis', 'Imtis (%)']
+
+    # Prepare data for table with normalized metrics
+    columns = ['Stulpelis', 'nRMSE', 'R²', 'SMAPE (%)', 'nMAE', 'Imties dydis', 'Imtis (%)']
     table_data = []
 
     for col, metrics in regression_metrics.items():
@@ -2665,13 +2940,19 @@ def generate_model_performance_plots(model_metrics):
         sample_percent = f"{(metrics['sample_size'] / metrics['total_samples'] * 100):.1f}" \
             if metrics.get('total_samples') and metrics.get('sample_size') else 'N/A'
 
+        # Use normalized metrics
+        nrmse_val = metrics.get('nrmse', float('nan'))
+        r2_val = metrics.get('r2', float('nan'))
+        smape_val = metrics.get('smape', float('nan'))
+        nmae_val = metrics.get('nmae', float('nan'))
+
         table_data.append([
             col,
-            f"{metrics['rmse']:.4f}",
-            f"{metrics['r2']:.4f}",
-            f"{metrics['mape']:.2f}",
-            f"{metrics['mae']:.4f}",
-            str(metrics['sample_size']),
+            f"{nrmse_val:.4f}" if not np.isnan(nrmse_val) else 'N/A',
+            f"{r2_val:.4f}" if not np.isnan(r2_val) else 'N/A',
+            f"{smape_val:.2f}" if not np.isnan(smape_val) else 'N/A',
+            f"{nmae_val:.4f}" if not np.isnan(nmae_val) else 'N/A',
+            str(metrics.get('sample_size', 'N/A')),
             sample_percent
         ])
     
@@ -2702,40 +2983,48 @@ def generate_model_performance_plots(model_metrics):
                 table[(i, j)].set_facecolor('#F2F2F2')
     
     plt.title('Modelių efektyvumo vertinimo metrikos', fontsize=14, fontweight='bold', pad=20)
-    
+
     img_buffer = io.BytesIO()
-    plt.savefig(img_buffer, format='png', dpi=300, bbox_inches='tight')
+    plt.savefig(img_buffer, format='png', dpi=80, bbox_inches='tight')
     img_buffer.seek(0)
     plots['performance_table'] = base64.b64encode(img_buffer.getvalue()).decode()
     plt.close()
     
-    # 2. RMSE Comparison Bar Chart
+    # 2. nRMSE Comparison Bar Chart
     if len(regression_metrics) > 1:
         fig, ax = plt.subplots(figsize=(12, 8))
-        
+
         columns = list(regression_metrics.keys())
-        rmse_values = [regression_metrics[col]['rmse'] for col in columns]
-        
-        bars = ax.bar(columns, rmse_values, color=['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd'][:len(columns)])
-        
-        ax.set_xlabel('Užpildyti stulpeliai', fontsize=12)
-        ax.set_ylabel('RMSE vertė', fontsize=12)
-        ax.set_title('Root Mean Square Error (RMSE) palyginimas', fontsize=14, fontweight='bold')
-        
-        # Add value labels on bars
-        for i, (bar, value) in enumerate(zip(bars, rmse_values)):
-            ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + max(rmse_values)*0.01,
-                   f'{value:.4f}', ha='center', va='bottom', fontsize=10, fontweight='bold')
-        
-        plt.xticks(rotation=45, ha='right')
-        plt.grid(axis='y', alpha=0.3)
-        plt.tight_layout()
-        
-        img_buffer = io.BytesIO()
-        plt.savefig(img_buffer, format='png', dpi=300, bbox_inches='tight')
-        img_buffer.seek(0)
-        plots['rmse_comparison'] = base64.b64encode(img_buffer.getvalue()).decode()
-        plt.close()
+        nrmse_values = [regression_metrics[col].get('nrmse', 0) for col in columns]
+
+        # Filter out NaN values
+        valid_data = [(col, val) for col, val in zip(columns, nrmse_values) if not np.isnan(val)]
+        if valid_data:
+            columns, nrmse_values = zip(*valid_data)
+            columns = list(columns)
+            nrmse_values = list(nrmse_values)
+
+            bars = ax.bar(columns, nrmse_values, color=['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd'][:len(columns)])
+
+            ax.set_xlabel('Užpildyti stulpeliai', fontsize=12)
+            ax.set_ylabel('nRMSE vertė', fontsize=12)
+            ax.set_title('Normalized Root Mean Square Error (nRMSE) palyginimas', fontsize=14, fontweight='bold')
+
+            # Add value labels on bars
+            max_val = max(nrmse_values) if nrmse_values else 1
+            for i, (bar, value) in enumerate(zip(bars, nrmse_values)):
+                ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + max_val*0.01,
+                       f'{value:.4f}', ha='center', va='bottom', fontsize=10, fontweight='bold')
+
+            plt.xticks(rotation=45, ha='right')
+            plt.grid(axis='y', alpha=0.3)
+            plt.tight_layout()
+
+            img_buffer = io.BytesIO()
+            plt.savefig(img_buffer, format='png', dpi=80, bbox_inches='tight')
+            img_buffer.seek(0)
+            plots['nrmse_comparison'] = base64.b64encode(img_buffer.getvalue()).decode()
+            plt.close()
     
     # 3. R² Score Comparison
     if len(regression_metrics) > 1:
@@ -2763,86 +3052,101 @@ def generate_model_performance_plots(model_metrics):
         plt.xticks(rotation=45, ha='right')
         plt.grid(axis='y', alpha=0.3)
         plt.tight_layout()
-        
+
         img_buffer = io.BytesIO()
-        plt.savefig(img_buffer, format='png', dpi=300, bbox_inches='tight')
+        plt.savefig(img_buffer, format='png', dpi=80, bbox_inches='tight')
         img_buffer.seek(0)
         plots['r2_comparison'] = base64.b64encode(img_buffer.getvalue()).decode()
         plt.close()
     
-    # 4. MAPE Comparison
+    # 4. SMAPE Comparison
     if len(regression_metrics) > 1:
         fig, ax = plt.subplots(figsize=(12, 8))
+
+        columns = list(regression_metrics.keys())
+        smape_values = [regression_metrics[col].get('smape', 0) for col in columns]
+
+        # Filter out NaN values
+        valid_data = [(col, val) for col, val in zip(columns, smape_values) if not np.isnan(val)]
+        if valid_data:
+            columns, smape_values = zip(*valid_data)
+            columns = list(columns)
+            smape_values = list(smape_values)
+
+            bars = ax.bar(columns, smape_values, color=['#DC143C', '#FF8C00', '#32CD32', '#4169E1', '#8B008B'][:len(columns)])
+
+            ax.set_xlabel('Užpildyti stulpeliai', fontsize=12)
+            ax.set_ylabel('SMAPE (%)', fontsize=12)
+            ax.set_title('Symmetric Mean Absolute Percentage Error (SMAPE) palyginimas', fontsize=14, fontweight='bold')
+
+            # Add value labels on bars
+            max_val = max(smape_values) if smape_values else 1
+            for i, (bar, value) in enumerate(zip(bars, smape_values)):
+                ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + max_val*0.02,
+                       f'{value:.2f}%', ha='center', va='bottom', fontsize=10, fontweight='bold')
+
+            # Add interpretation lines (SMAPE ranges 0-100%)
+            ax.axhline(y=10, color='green', linestyle='--', alpha=0.7, label='Labai geras modelis (SMAPE ≤ 10%)')
+            ax.axhline(y=20, color='orange', linestyle='--', alpha=0.7, label='Geras modelis (SMAPE ≤ 20%)')
+            ax.legend(loc='upper right')
+
+            plt.xticks(rotation=45, ha='right')
+            plt.grid(axis='y', alpha=0.3)
+            plt.tight_layout()
         
-        mape_values = [regression_metrics[col]['mape'] for col in columns]
-        
-        bars = ax.bar(columns, mape_values, color=['#DC143C', '#FF8C00', '#32CD32', '#4169E1', '#8B008B'][:len(columns)])
-        
-        ax.set_xlabel('Užpildyti stulpeliai', fontsize=12)
-        ax.set_ylabel('MAPE (%)', fontsize=12)
-        ax.set_title('Mean Absolute Percentage Error (MAPE) palyginimas', fontsize=14, fontweight='bold')
-        
-        # Add value labels on bars
-        for i, (bar, value) in enumerate(zip(bars, mape_values)):
-            ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + max(mape_values)*0.02,
-                   f'{value:.2f}%', ha='center', va='bottom', fontsize=10, fontweight='bold')
-        
-        # Add interpretation lines
-        ax.axhline(y=10, color='green', linestyle='--', alpha=0.7, label='Labai geras modelis (MAPE ≤ 10%)')
-        ax.axhline(y=20, color='orange', linestyle='--', alpha=0.7, label='Geras modelis (MAPE ≤ 20%)')
-        ax.legend(loc='upper right')
-        
-        plt.xticks(rotation=45, ha='right')
-        plt.grid(axis='y', alpha=0.3)
-        plt.tight_layout()
-        
-        img_buffer = io.BytesIO()
-        plt.savefig(img_buffer, format='png', dpi=300, bbox_inches='tight')
-        img_buffer.seek(0)
-        plots['mape_comparison'] = base64.b64encode(img_buffer.getvalue()).decode()
-        plt.close()
+            img_buffer = io.BytesIO()
+            plt.savefig(img_buffer, format='png', dpi=80, bbox_inches='tight')
+            img_buffer.seek(0)
+            plots['smape_comparison'] = base64.b64encode(img_buffer.getvalue()).decode()
+            plt.close()
     
     # 5. Combined Metrics Radar Chart (if multiple models)
     if len(regression_metrics) > 1:
         fig, ax = plt.subplots(figsize=(10, 10), subplot_kw=dict(projection='polar'))
-        
+
         # Normalize metrics for radar chart (0-1 scale)
-        metrics_names = ['RMSE', 'R²', 'MAPE', 'MAE']
-        
-        for i, (col, metrics) in enumerate(regression_metrics.items()):
-            # Normalize values (invert RMSE, MAPE, MAE so higher is better)
-            max_rmse = max([m['rmse'] for m in regression_metrics.values()])
-            max_mape = max([m['mape'] for m in regression_metrics.values()])
-            max_mae = max([m['mae'] for m in regression_metrics.values()])
-            
-            normalized_values = [
-                1 - (metrics['rmse'] / max_rmse) if max_rmse > 0 else 1,  # Inverted RMSE
-                metrics['r2'],  # R² (already 0-1)
-                1 - (metrics['mape'] / max_mape) if max_mape > 0 else 1,  # Inverted MAPE
-                1 - (metrics['mae'] / max_mae) if max_mae > 0 else 1  # Inverted MAE
-            ]
-            
-            angles = np.linspace(0, 2 * np.pi, len(metrics_names), endpoint=False).tolist()
-            normalized_values += normalized_values[:1]  # Complete the circle
-            angles += angles[:1]
-            
-            color = plt.cm.Set1(i / len(regression_metrics))
-            ax.plot(angles, normalized_values, 'o-', linewidth=2, label=col, color=color)
-            ax.fill(angles, normalized_values, alpha=0.25, color=color)
-        
-        ax.set_xticks(angles[:-1])
-        ax.set_xticklabels(metrics_names)
-        ax.set_ylim(0, 1)
-        ax.set_title('Modelių efektyvumo palyginimas\n(Didesnis plotas = geresnis modelis)', y=1.08, fontsize=14, fontweight='bold')
-        ax.legend(loc='upper right', bbox_to_anchor=(1.3, 1.0))
-        
-        plt.tight_layout()
-        
-        img_buffer = io.BytesIO()
-        plt.savefig(img_buffer, format='png', dpi=300, bbox_inches='tight')
-        img_buffer.seek(0)
-        plots['radar_comparison'] = base64.b64encode(img_buffer.getvalue()).decode()
-        plt.close()
+        metrics_names = ['nRMSE', 'R²', 'SMAPE', 'nMAE']
+
+        # Get valid metrics (filter out NaN values)
+        valid_metrics = {col: m for col, m in regression_metrics.items()
+                        if not np.isnan(m.get('nrmse', float('nan'))) and
+                           not np.isnan(m.get('r2', float('nan')))}
+
+        if valid_metrics:
+            for i, (col, metrics) in enumerate(valid_metrics.items()):
+                # Normalize values (invert nRMSE, SMAPE, nMAE so higher is better)
+                max_nrmse = max([m.get('nrmse', 0) for m in valid_metrics.values()])
+                max_smape = max([m.get('smape', 0) for m in valid_metrics.values()])
+                max_nmae = max([m.get('nmae', 0) for m in valid_metrics.values()])
+
+                normalized_values = [
+                    1 - (metrics.get('nrmse', 0) / max_nrmse) if max_nrmse > 0 else 1,  # Inverted nRMSE
+                    metrics.get('r2', 0),  # R² (already 0-1)
+                    1 - (metrics.get('smape', 0) / max_smape) if max_smape > 0 else 1,  # Inverted SMAPE
+                    1 - (metrics.get('nmae', 0) / max_nmae) if max_nmae > 0 else 1  # Inverted nMAE
+                ]
+
+                angles = np.linspace(0, 2 * np.pi, len(metrics_names), endpoint=False).tolist()
+                normalized_values += normalized_values[:1]  # Complete the circle
+                angles += angles[:1]
+
+                color = plt.cm.Set1(i / len(valid_metrics))
+                ax.plot(angles, normalized_values, 'o-', linewidth=2, label=col, color=color)
+                ax.fill(angles, normalized_values, alpha=0.25, color=color)
+
+            ax.set_xticks(angles[:-1])
+            ax.set_xticklabels(metrics_names)
+            ax.set_ylim(0, 1)
+            ax.set_title('Modelių efektyvumo palyginimas\n(Didesnis plotas = geresnis modelis)', y=1.08, fontsize=14, fontweight='bold')
+            ax.legend(loc='upper right', bbox_to_anchor=(1.3, 1.0))
+
+            plt.tight_layout()
+
+            img_buffer = io.BytesIO()
+            plt.savefig(img_buffer, format='png', dpi=80, bbox_inches='tight')
+            img_buffer.seek(0)
+            plots['radar_comparison'] = base64.b64encode(img_buffer.getvalue()).decode()
+            plt.close()
     
     return plots
 
