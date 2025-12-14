@@ -30,3 +30,4 @@ uploads/*.csv
 Magistro_darbas.pdf
 
 #Additionally
+.claude/
