@@ -1,0 +1,1827 @@
+{
+    "config": {
+        "terminology": {
+            "item": "publication",
+            "items": "publications",
+            "link": "shared keyword link",
+            "links": "shared keyword links"
+        }
+    },
+    "network": {
+        "items": [
+            {
+                "id": 1,
+                "label": "Missing data filling method based on linear interpolation...",
+                "x": 1.8369701987210297e-16,
+                "y": 1,
+                "description": "<b>Missing data filling method based on linear interpolation and lightgbm</b><br><i>Journal of Physics: Conference Series</i><br>Year: 2021<br>Authors: guilin huang",
+                "url": "https://doi.org/10.1088/1742-6596/1754/1/012187",
+                "cluster": 10,
+                "weights": {
+                    "Authors": 1,
+                    "Keywords": 0
+                },
+                "scores": {
+                    "Publication year": 2021
+                }
+            },
+            {
+                "id": 2,
+                "label": "Hierarchical clustering and matrix completion for the rec...",
+                "x": 0.059800000000000186,
+                "y": 0.9982,
+                "description": "<b>Hierarchical clustering and matrix completion for the reconstruction of world input-output tables</b><br>Authors: francesco biancalani, rodolfo metulini, massimo riccaboni, giorgio gnecco",
+                "url": "https://doi.org/10.1007/s10182-022-00448-6",
+                "score<Publication year>": null,
+                "cluster": 11,
+                "weights": {
+                    "Authors": 4,
+                    "Keywords": 5
+                },
+                "scores": {
+                    "Publication year": null
+                }
+            },
+            {
+                "id": 3,
+                "label": "Correlation, hierarchies, and networks in financial markets",
+                "x": 0.11940000000000017,
+                "y": 0.9928,
+                "description": "<b>Correlation, hierarchies, and networks in financial markets</b><br>Year: 2008<br>Authors: fabrizio lillo, rosario n mantegna, michele tumminello",
+                "url": null,
+                "cluster": 12,
+                "weights": {
+                    "Authors": 3,
+                    "Keywords": 7
+                },
+                "scores": {
+                    "Publication year": 2008
+                }
+            },
+            {
+                "id": 4,
+                "label": "Random Forest Modeling For Forecasting Economic Growth:, ...",
+                "x": 0.17860000000000018,
+                "y": 0.9839,
+                "description": "<b>Random Forest Modeling For Forecasting Economic Growth:, A Machine Learning Approach In The Case Of Algeria \"1964-2022\"</b><br><i>مجلة أبعاد اقتصادية</i><br>Year: 2024<br>Authors: malika messaoudi",
+                "url": "https://doi.org/10.36539/1427-014-001-019",
+                "cluster": 13,
+                "weights": {
+                    "Authors": 1,
+                    "Keywords": 0
+                },
+                "scores": {
+                    "Publication year": 2024
+                }
+            },
+            {
+                "id": 5,
+                "label": "Crisis-proof services: Why trade in services did not suff...",
+                "x": 0.23710000000000017,
+                "y": 0.9715,
+                "description": "<b>Crisis-proof services: Why trade in services did not suffer during the 2008-2009 collapse</b><br><i>Journal of International Economics</i><br>Year: 2016<br>Authors: andrea ariu",
+                "url": "https://doi.org/10.1016/J.JINTECO.2015.09.002",
+                "cluster": 14,
+                "weights": {
+                    "Authors": 1,
+                    "Keywords": 3
+                },
+                "scores": {
+                    "Publication year": 2016
+                }
+            },
+            {
+                "id": 6,
+                "label": "Debesų paslaugų programavimo sprendimų tyrimas naudojant ...",
+                "x": 0.2948000000000002,
+                "y": 0.9556,
+                "description": "<b>Debesų paslaugų programavimo sprendimų tyrimas naudojant Google App Engine aplinką</b><br><i>Vilniaus universitetas</i><br>Year: 2025<br>Authors: toma visockytė",
+                "url": null,
+                "cluster": 15,
+                "weights": {
+                    "Authors": 1,
+                    "Keywords": 0
+                },
+                "scores": {
+                    "Publication year": 2025
+                }
+            },
+            {
+                "id": 7,
+                "label": "Implementing Continuous Integration and Continuous Deploy...",
+                "x": 0.35140000000000016,
+                "y": 0.9362,
+                "description": "<b>Implementing Continuous Integration and Continuous Deployment (CI/CD) in Modern Software Development</b><br><i>International Journal of Science and Research (IJSR)</i><br>Year: 2023<br>Authors: yash jani",
+                "url": "https://doi.org/10.21275/SR24716120535",
+                "cluster": 16,
+                "weights": {
+                    "Authors": 1,
+                    "Keywords": 0
+                },
+                "scores": {
+                    "Publication year": 2023
+                }
+            },
+            {
+                "id": 8,
+                "label": "Predicting economic resilience: A machine learning approa...",
+                "x": 0.4067000000000002,
+                "y": 0.9135,
+                "description": "<b>Predicting economic resilience: A machine learning approach to rural development</b><br><i>Alexandria Engineering Journal</i><br>Year: 2025<br>Authors: shun du, lei wang, yajuan xu",
+                "url": "https://www.sciencedirect.com/science/article/pii/S1110016825002273?via%3Dihub",
+                "cluster": 17,
+                "weights": {
+                    "Authors": 3,
+                    "Keywords": 4
+                },
+                "scores": {
+                    "Publication year": 2025
+                }
+            },
+            {
+                "id": 9,
+                "label": "Data Structures for Statistical Computing in Python",
+                "x": 0.4606000000000002,
+                "y": 0.8876,
+                "description": "<b>Data Structures for Statistical Computing in Python</b><br><i>SciPy 2010</i><br>Year: 2010<br>Authors: wes mckinney",
+                "url": "https://proceedings.scipy.org/articles/Majora-92bf1922-00a",
+                "cluster": 18,
+                "weights": {
+                    "Authors": 1,
+                    "Keywords": 2
+                },
+                "scores": {
+                    "Publication year": 2010
+                }
+            },
+            {
+                "id": 10,
+                "label": "Generalizability of Machine Learning Models: Quantitative...",
+                "x": 0.5129,
+                "y": 0.8584,
+                "description": "<b>Generalizability of Machine Learning Models: Quantitative Evaluation of Three Methodological Pitfalls</b><br><i>Radiology: Artificial Intelligence</i><br>Year: 2023<br>Authors: alan spatz, farhad maleki, caroline reinhold, reza forghani, rajiv gupta (+1 more)",
+                "url": "/doi/pdf/10.1148/ryai.220028?download=true",
+                "cluster": 2,
+                "weights": {
+                    "Authors": 6,
+                    "Keywords": 9
+                },
+                "scores": {
+                    "Publication year": 2023
+                }
+            },
+            {
+                "id": 11,
+                "label": "Assessing the Validity of k-Fold Cross-Validation for Mod...",
+                "x": 0.5633,
+                "y": 0.8262,
+                "description": "<b>Assessing the Validity of k-Fold Cross-Validation for Model Selection: Evidence from Bankruptcy Prediction Using Random Forest and XGBoost</b><br><i>Computation 2025, Vol. 13, Page 127</i><br>Year: 2025<br>Authors: vlad teodorescu, laura obreja brașoveanu",
+                "url": "https://www.mdpi.com/2079-3197/13/5/127/htm https://www.mdpi.com/2079-3197/13/5/127",
+                "cluster": 19,
+                "weights": {
+                    "Authors": 2,
+                    "Keywords": 8
+                },
+                "scores": {
+                    "Publication year": 2025
+                }
+            },
+            {
+                "id": 12,
+                "label": "Opening the Black Box: Nowcasting Singapore's GDP Growth ...",
+                "x": 0.6117,
+                "y": 0.7911,
+                "description": "<b>Opening the Black Box: Nowcasting Singapore's GDP Growth and its Explainability</b><br>Year: 2025<br>Authors: chiarma profssa rosaria romano dott luca attolico chiarmo jamus jerome lim coordinatore chiarma profssa margherita scoppola",
+                "url": "https://arxiv.org/pdf/2512.02092v1",
+                "cluster": 20,
+                "weights": {
+                    "Authors": 1,
+                    "Keywords": 3
+                },
+                "scores": {
+                    "Publication year": 2025
+                }
+            },
+            {
+                "id": 13,
+                "label": "Small Area Shrinkage Estimation",
+                "x": 0.6579,
+                "y": 0.7531,
+                "description": "<b>Small Area Shrinkage Estimation</b><br><i>Statistical Science</i><br>Year: 2012<br>Authors: m ghosh, g datta",
+                "url": "https://doi.org/10.1214/11-STS374",
+                "cluster": 21,
+                "weights": {
+                    "Authors": 2,
+                    "Keywords": 10
+                },
+                "scores": {
+                    "Publication year": 2012
+                }
+            },
+            {
+                "id": 14,
+                "label": "ebnm: An R Package for Solving the Empirical Bayes Normal...",
+                "x": 0.7018,
+                "y": 0.7124,
+                "description": "<b>ebnm: An R Package for Solving the Empirical Bayes Normal Means Problem Using a Variety of Prior Families</b><br><i>Journal of Statistical Software</i><br>Year: 2025<br>Authors: jason willwerscheid, peter carbonetto, matthew stephens",
+                "url": "https://doi.org/10.18637/JSS.V114.I03",
+                "cluster": 22,
+                "weights": {
+                    "Authors": 3,
+                    "Keywords": 6
+                },
+                "scores": {
+                    "Publication year": 2025
+                }
+            },
+            {
+                "id": 15,
+                "label": "A new shrinkage estimator for dispersion improves differe...",
+                "x": 0.7431,
+                "y": 0.6691,
+                "description": "<b>A new shrinkage estimator for dispersion improves differential expression detection in RNA-seq data</b><br><i>Biostatistics</i><br>Year: 2013<br>Authors: zhijin wu, chi wang, hao wu",
+                "url": "https://doi.org/10.1093/biostatistics/kxs033",
+                "cluster": 23,
+                "weights": {
+                    "Authors": 3,
+                    "Keywords": 4
+                },
+                "scores": {
+                    "Publication year": 2013
+                }
+            },
+            {
+                "id": 16,
+                "label": "Bridging the Gap: Missing Data Imputation Methods and The...",
+                "x": 0.7818,
+                "y": 0.6235,
+                "description": "<b>Bridging the Gap: Missing Data Imputation Methods and Their Effect on Dementia Classification Performance</b><br><i>Brain Sciences 2025, Vol. 15, Page 639</i><br>Year: 2025<br>Authors: maria giovanna bianco, andrea quattrone, federica aracri, alessia sarica",
+                "url": "https://www.mdpi.com/2076-3425/15/6/639/htm https://www.mdpi.com/2076-3425/15/6/639",
+                "cluster": 1,
+                "weights": {
+                    "Authors": 4,
+                    "Keywords": 5
+                },
+                "scores": {
+                    "Publication year": 2025
+                }
+            },
+            {
+                "id": 17,
+                "label": "Greedy function approximation: A gradient boosting machine",
+                "x": 0.8177,
+                "y": 0.5756,
+                "description": "<b>Greedy function approximation: A gradient boosting machine</b><br><i>Annals of Statistics</i><br>Year: 2001<br>Authors: jerome h. friedman",
+                "url": "https://doi.org/10.1214/AOS/1013203451",
+                "cluster": 6,
+                "weights": {
+                    "Authors": 1,
+                    "Keywords": 4
+                },
+                "scores": {
+                    "Publication year": 2001
+                }
+            },
+            {
+                "id": 18,
+                "label": "Hierarchical Shrinkage: improving the accuracy and interp...",
+                "x": 0.8507,
+                "y": 0.5257,
+                "description": "<b>Hierarchical Shrinkage: improving the accuracy and interpretability of tree-based methods</b><br><i>Proceedings of Machine Learning Research</i><br>Year: 2022<br>Authors: bin yu, chandan singh, abhineet agarwal, omer ronen, yan shuo tan",
+                "url": "https://arxiv.org/pdf/2202.00858",
+                "cluster": 24,
+                "weights": {
+                    "Authors": 5,
+                    "Keywords": 0
+                },
+                "scores": {
+                    "Publication year": 2022
+                }
+            },
+            {
+                "id": 19,
+                "label": "Randomization as Regularization: A Degrees of Freedom Exp...",
+                "x": 0.8806,
+                "y": 0.4738999999999998,
+                "description": "<b>Randomization as Regularization: A Degrees of Freedom Explanation for Random Forest Success</b><br><i>Journal of Machine Learning Research</i><br>Year: 2019<br>Authors: siyu zhou, lucas mentch",
+                "url": "https://arxiv.org/pdf/1911.00190",
+                "cluster": 25,
+                "weights": {
+                    "Authors": 2,
+                    "Keywords": 5
+                },
+                "scores": {
+                    "Publication year": 2019
+                }
+            },
+            {
+                "id": 20,
+                "label": "Machine-learned patterns suggest that diversification dri...",
+                "x": 0.9074,
+                "y": 0.42039999999999983,
+                "description": "<b>Machine-learned patterns suggest that diversification drives economic development</b><br><i>Journal of the Royal Society Interface</i><br>Year: 2018<br>Authors: andrés gómez-liévano, ricardo hausmann, matthew h. bonds, charles d. brummitt",
+                "url": "https://arxiv.org/pdf/1812.03534",
+                "cluster": 26,
+                "weights": {
+                    "Authors": 4,
+                    "Keywords": 6
+                },
+                "scores": {
+                    "Publication year": 2018
+                }
+            },
+            {
+                "id": 21,
+                "label": "Analysis of Feature Importance Based on Random Forest for...",
+                "x": 0.9309,
+                "y": 0.36529999999999985,
+                "description": "<b>Analysis of Feature Importance Based on Random Forest for Stock Selection</b><br>Year: 2025<br>Authors: yiru wang",
+                "url": "https://doi.org/10.5220/0013233500004568",
+                "cluster": 27,
+                "weights": {
+                    "Authors": 1,
+                    "Keywords": 4
+                },
+                "scores": {
+                    "Publication year": 2025
+                }
+            },
+            {
+                "id": 22,
+                "label": "Machine-Learning-Based Imputation Method for Filling Miss...",
+                "x": 0.9511,
+                "y": 0.30899999999999983,
+                "description": "<b>Machine-Learning-Based Imputation Method for Filling Missing Values in Ground Meteorological Observation Data</b><br><i>Algorithms 2023, Vol. 16, Page 422</i><br>Year: 2023<br>Authors: guohui zhao, xupeng ren, cong li",
+                "url": "https://www.mdpi.com/1999-4893/16/9/422/htm https://www.mdpi.com/1999-4893/16/9/422",
+                "cluster": 28,
+                "weights": {
+                    "Authors": 3,
+                    "Keywords": 4
+                },
+                "scores": {
+                    "Publication year": 2023
+                }
+            },
+            {
+                "id": 23,
+                "label": "Imputation of Missing Values in Economic and Financial Ti...",
+                "x": 0.9678,
+                "y": 0.2515999999999998,
+                "description": "<b>Imputation of Missing Values in Economic and Financial Time Series Data Using Five Principal Component Analysis Approaches</b><br><i>CBN Journal of Applied Statistics</i><br>Year: 2019<br>Authors: chisimkwuo john, emmanuel j ekpenyong, charles c nworu",
+                "url": "https://doi.org/10.33429/Cjas.10119.3/6",
+                "cluster": 29,
+                "weights": {
+                    "Authors": 3,
+                    "Keywords": 0
+                },
+                "scores": {
+                    "Publication year": 2019
+                }
+            },
+            {
+                "id": 24,
+                "label": "Evaluation of imputation techniques with varying percenta...",
+                "x": 0.9811,
+                "y": 0.19329999999999983,
+                "description": "<b>Evaluation of imputation techniques with varying percentage of missing data</b><br>Year: 2021<br>Authors: seema sangari, herman e. ray",
+                "url": "https://arxiv.org/pdf/2109.04227",
+                "cluster": 1,
+                "weights": {
+                    "Authors": 2,
+                    "Keywords": 11
+                },
+                "scores": {
+                    "Publication year": 2021
+                }
+            },
+            {
+                "id": 25,
+                "label": "From Predictive Methods to Missing Data Imputation: An Op...",
+                "x": 0.9909,
+                "y": 0.13419999999999985,
+                "description": "<b>From Predictive Methods to Missing Data Imputation: An Optimization Approach</b><br><i>Journal of Machine Learning Research</i><br>Year: 2018<br>Authors: colin pawlowski, ying daisy zhuo, dimitris bertsimas",
+                "url": "http://jmlr.org/papers/v18/17-073.html.",
+                "cluster": 30,
+                "weights": {
+                    "Authors": 3,
+                    "Keywords": 4
+                },
+                "scores": {
+                    "Publication year": 2018
+                }
+            },
+            {
+                "id": 26,
+                "label": "Review of Zero-Inflated Models with Missing Data",
+                "x": 0.9972,
+                "y": 0.07469999999999984,
+                "description": "<b>Review of Zero-Inflated Models with Missing Data</b><br>Year: 2017<br>Authors: shen-ming lee, chin-shang li, t martin lukusa",
+                "url": "https://doi.org/10.3844/amjbsp.2017.1.12",
+                "cluster": 1,
+                "weights": {
+                    "Authors": 3,
+                    "Keywords": 7
+                },
+                "scores": {
+                    "Publication year": 2017
+                }
+            },
+            {
+                "id": 27,
+                "label": "Scikit-learn: Machine Learning in Python",
+                "x": 0.9999,
+                "y": 0.014999999999999817,
+                "description": "<b>Scikit-learn: Machine Learning in Python</b><br><i>Journal of Machine Learning Research</i><br>Year: 2012<br>Authors: alexandre passos, bertrand thirion, édouard duchesnay, fabian pedregosa, david cournapeau (+11 more)",
+                "url": "https://arxiv.org/pdf/1201.0490",
+                "cluster": 4,
+                "weights": {
+                    "Authors": 16,
+                    "Keywords": 4
+                },
+                "scores": {
+                    "Publication year": 2012
+                }
+            },
+            {
+                "id": 28,
+                "label": "Density estimation: For statistics and data analysis",
+                "x": 0.999,
+                "y": -0.04490000000000019,
+                "description": "<b>Density estimation: For statistics and data analysis</b><br><i>Density Estimation: For Statistics and Data Analysis</i><br>Year: 2018<br>Authors: b. w. silverman",
+                "url": "https://www.taylorfrancis.com/books/mono/10.1201/9781315140919/density-estimation-statistics-data-analysis-bernard-silverman",
+                "cluster": 31,
+                "weights": {
+                    "Authors": 1,
+                    "Keywords": 0
+                },
+                "scores": {
+                    "Publication year": 2018
+                }
+            },
+            {
+                "id": 29,
+                "label": "Do we Need Dozens of Methods for Real World Missing Value...",
+                "x": 0.9945,
+                "y": -0.10450000000000016,
+                "description": "<b>Do we Need Dozens of Methods for Real World Missing Value Imputation?</b><br>Year: 2025<br>Authors: krystyna grzesiak, jeffrey näf, christophe muller, julie josse",
+                "url": "https://arxiv.org/pdf/2511.04833v1",
+                "cluster": 32,
+                "weights": {
+                    "Authors": 4,
+                    "Keywords": 1
+                },
+                "scores": {
+                    "Publication year": 2025
+                }
+            },
+            {
+                "id": 30,
+                "label": "MissForest—non-parametric missing value imputation for mi...",
+                "x": 0.9865,
+                "y": -0.16380000000000017,
+                "description": "<b>MissForest—non-parametric missing value imputation for mixed-type data</b><br><i>Bioinformatics</i><br>Year: 2012<br>Authors: daniel j. stekhoven, peter bühlmann",
+                "url": "https://dx.doi.org/10.1093/bioinformatics/btr597",
+                "cluster": 33,
+                "weights": {
+                    "Authors": 2,
+                    "Keywords": 0
+                },
+                "scores": {
+                    "Publication year": 2012
+                }
+            },
+            {
+                "id": 31,
+                "label": "Randomization Can Reduce Both Bias and Variance: A Case S...",
+                "x": 0.9749,
+                "y": -0.22250000000000017,
+                "description": "<b>Randomization Can Reduce Both Bias and Variance: A Case Study in Random Forests</b><br><i>Journal of Machine Learning Research</i><br>Year: 2025<br>Authors: rahul mazumder, brian liu, florence d'alche-buc",
+                "url": "http://jmlr.org/papers/v26/24-0255.html",
+                "cluster": 8,
+                "weights": {
+                    "Authors": 3,
+                    "Keywords": 4
+                },
+                "scores": {
+                    "Publication year": 2025
+                }
+            },
+            {
+                "id": 32,
+                "label": "Little's test of missing completely at random",
+                "x": 0.9599,
+                "y": -0.28040000000000015,
+                "description": "<b>Little's test of missing completely at random</b><br><i>Stata Journal</i><br>Year: 2013<br>Authors: cheng li",
+                "url": "/doi/pdf/10.1177/1536867X1301300407?download=true",
+                "cluster": 34,
+                "weights": {
+                    "Authors": 1,
+                    "Keywords": 11
+                },
+                "scores": {
+                    "Publication year": 2013
+                }
+            },
+            {
+                "id": 33,
+                "label": "A Test of Missing Completely at Random for Multivariate D...",
+                "x": 0.9414,
+                "y": -0.33730000000000016,
+                "description": "<b>A Test of Missing Completely at Random for Multivariate Data with Missing Values</b><br><i>Journal of the American Statistical Association</i><br>Year: 1988<br>Authors: roderick j. a. little",
+                "url": "https://doi.org/10.2307/2290157",
+                "cluster": 35,
+                "weights": {
+                    "Authors": 1,
+                    "Keywords": 0
+                },
+                "scores": {
+                    "Publication year": 1988
+                }
+            },
+            {
+                "id": 34,
+                "label": "Statistical analysis with missing data",
+                "x": 0.9195,
+                "y": -0.3930000000000002,
+                "description": "<b>Statistical analysis with missing data</b><br><i>Statistical Analysis with Missing Data</i><br>Year: 2019<br>Authors: roderick j.a. little, donald b. rubin",
+                "url": "https://onlinelibrary.wiley.com/doi/book/10.1002/9781119482260",
+                "cluster": 36,
+                "weights": {
+                    "Authors": 2,
+                    "Keywords": 0
+                },
+                "scores": {
+                    "Publication year": 2019
+                }
+            },
+            {
+                "id": 35,
+                "label": "Comparison of Performance of Data Imputation Methods for ...",
+                "x": 0.8944,
+                "y": -0.44730000000000014,
+                "description": "<b>Comparison of Performance of Data Imputation Methods for Numeric Dataset</b><br><i>Applied Artificial Intelligence</i><br>Year: 2019<br>Authors: krishnan ramanathan, dhanya pramod, anil jadhav",
+                "url": "https://www.tandfonline.com/doi/pdf/10.1080/08839514.2019.1637138",
+                "cluster": 37,
+                "weights": {
+                    "Authors": 3,
+                    "Keywords": 0
+                },
+                "scores": {
+                    "Publication year": 2019
+                }
+            },
+            {
+                "id": 36,
+                "label": "Missing data imputation: focusing on single imputation",
+                "x": 0.866,
+                "y": -0.5,
+                "description": "<b>Missing data imputation: focusing on single imputation</b><br><i>Annals of Translational Medicine</i><br>Year: 2016<br>Authors: zhongheng zhang",
+                "url": "https://atm.amegroups.org/article/view/8839/html https://atm.amegroups.org/article/view/8839",
+                "cluster": 38,
+                "weights": {
+                    "Authors": 1,
+                    "Keywords": 4
+                },
+                "scores": {
+                    "Publication year": 2016
+                }
+            },
+            {
+                "id": 37,
+                "label": "Scikit-learn: Machine Learning in Python",
+                "x": 0.8346,
+                "y": -0.5509,
+                "description": "<b>Scikit-learn: Machine Learning in Python</b><br><i>Journal of Machine Learning Research</i><br>Year: 2012<br>Authors: alexandre passos, bertrand thirion, édouard duchesnay, fabian pedregosa, david cournapeau (+11 more)",
+                "url": "https://arxiv.org/pdf/1201.0490",
+                "cluster": 4,
+                "weights": {
+                    "Authors": 16,
+                    "Keywords": 4
+                },
+                "scores": {
+                    "Publication year": 2012
+                }
+            },
+            {
+                "id": 38,
+                "label": "Improved Mean Methods of Imputation",
+                "x": 0.8001,
+                "y": -0.5998,
+                "description": "<b>Improved Mean Methods of Imputation</b><br><i>Statistics, Optimization \\& Information Computing</i><br>Year: 2018<br>Authors: hassan a. karimi, mahdi hashemi",
+                "url": "http://www.iapress.org/index.php/soic/article/view/20181203",
+                "cluster": 3,
+                "weights": {
+                    "Authors": 2,
+                    "Keywords": 6
+                },
+                "scores": {
+                    "Publication year": 2018
+                }
+            },
+            {
+                "id": 39,
+                "label": "Multiple imputation by chained equations: what is it and ...",
+                "x": 0.7628,
+                "y": -0.6466,
+                "description": "<b>Multiple imputation by chained equations: what is it and how does it work?</b><br><i>International journal of methods in psychiatric research</i><br>Year: 2011<br>Authors: philip j. leaf, constantine frangakis, melissa j. azur, elizabeth a. stuart",
+                "url": "https://pubmed.ncbi.nlm.nih.gov/21499542/",
+                "cluster": 39,
+                "weights": {
+                    "Authors": 4,
+                    "Keywords": 22
+                },
+                "scores": {
+                    "Publication year": 2011
+                }
+            },
+            {
+                "id": 40,
+                "label": "mice: Multivariate imputation by chained equations in R",
+                "x": 0.7228,
+                "y": -0.6911,
+                "description": "<b>mice: Multivariate imputation by chained equations in R</b><br><i>Journal of Statistical Software</i><br>Year: 2011<br>Authors: karin groothuis-oudshoorn, stef van buuren",
+                "url": "https://doi.org/10.18637/JSS.V045.I03",
+                "cluster": 1,
+                "weights": {
+                    "Authors": 2,
+                    "Keywords": 7
+                },
+                "scores": {
+                    "Publication year": 2011
+                }
+            },
+            {
+                "id": 41,
+                "label": "A survey on missing data in machine learning",
+                "x": 0.6802,
+                "y": -0.7331,
+                "description": "<b>A survey on missing data in machine learning</b><br><i>Journal of Big Data 2021 8:1</i><br>Year: 2021<br>Authors: tlamelo emmanuel, oteng tabona, thabo semong, banyatsang mphago, dimane mpoeleng (+1 more)",
+                "url": "https://journalofbigdata.springeropen.com/articles/10.1186/s40537-021-00516-9",
+                "cluster": 40,
+                "weights": {
+                    "Authors": 6,
+                    "Keywords": 7
+                },
+                "scores": {
+                    "Publication year": 2021
+                }
+            },
+            {
+                "id": 42,
+                "label": "Nearest neighbor imputation algorithms: a critical evalua...",
+                "x": 0.6351,
+                "y": -0.7724,
+                "description": "<b>Nearest neighbor imputation algorithms: a critical evaluation</b><br><i>BMC Medical Informatics and Decision Making 2016 16:3</i><br>Year: 2016<br>Authors: lorenzo beretta, alessandro santaniello",
+                "url": "https://bmcmedinformdecismak.biomedcentral.com/articles/10.1186/s12911-016-0318-z",
+                "cluster": 41,
+                "weights": {
+                    "Authors": 2,
+                    "Keywords": 3
+                },
+                "scores": {
+                    "Publication year": 2016
+                }
+            },
+            {
+                "id": 43,
+                "label": "Handling Missing Data in Longitudinal Anthropometric Data...",
+                "x": 0.5878,
+                "y": -0.809,
+                "description": "<b>Handling Missing Data in Longitudinal Anthropometric Data Using Multiple Imputation Method</b><br><i>Lecture Notes in Networks and Systems</i><br>Year: 2024<br>Authors: aniket thorave, dhruv varma, neha sharma, chittaranjan s. yajnik",
+                "url": "https://link.springer.com/chapter/10.1007/978-981-97-3242-5_19",
+                "cluster": 5,
+                "weights": {
+                    "Authors": 4,
+                    "Keywords": 6
+                },
+                "scores": {
+                    "Publication year": 2024
+                }
+            },
+            {
+                "id": 44,
+                "label": "Impacts of Missing Data Imputation on Resilience Evaluati...",
+                "x": 0.5384,
+                "y": -0.8427,
+                "description": "<b>Impacts of Missing Data Imputation on Resilience Evaluation for Water Distribution System</b><br><i>Urban Science 2024, Vol. 8,</i><br>Year: 2024<br>Authors: binod ale magar, utsav parajuli, sangmin shin, amrit babu ghimire",
+                "url": "https://www.mdpi.com/2413-8851/8/4/177",
+                "cluster": 5,
+                "weights": {
+                    "Authors": 4,
+                    "Keywords": 5
+                },
+                "scores": {
+                    "Publication year": 2024
+                }
+            },
+            {
+                "id": 45,
+                "label": "A comparison of imputation methods for categorical data",
+                "x": 0.4869999999999998,
+                "y": -0.8734,
+                "description": "<b>A comparison of imputation methods for categorical data</b><br><i>Informatics in Medicine Unlocked</i><br>Year: 2023<br>Authors: shaheen mz memon, robert wamala, ignace h. kabano",
+                "url": "https://www.sciencedirect.com/science/article/pii/S2352914823002289?via%3Dihub",
+                "cluster": 1,
+                "weights": {
+                    "Authors": 3,
+                    "Keywords": 5
+                },
+                "scores": {
+                    "Publication year": 2023
+                }
+            },
+            {
+                "id": 46,
+                "label": "Enhancing Retail Demand Forecasting with Xgboost: A Compa...",
+                "x": 0.43389999999999984,
+                "y": -0.901,
+                "description": "<b>Enhancing Retail Demand Forecasting with Xgboost: A Comparative Study with Machine Learning and Deep Learning Models</b><br>Year: 2025<br>Authors: pathuri jai ram chowdary, b. v. n. prasad paruchuri, akhil balusani",
+                "url": "https://papers.ssrn.com/abstract=5274510",
+                "cluster": 2,
+                "weights": {
+                    "Authors": 3,
+                    "Keywords": 9
+                },
+                "scores": {
+                    "Publication year": 2025
+                }
+            },
+            {
+                "id": 47,
+                "label": "Comparative Study of Missing Value Imputation Techniques ...",
+                "x": 0.3791999999999998,
+                "y": -0.9253,
+                "description": "<b>Comparative Study of Missing Value Imputation Techniques on E-Commerce Product Ratings</b><br><i>Informatica</i><br>Year: 2023<br>Authors: parul gupta, dimple chehal, tanisha gupta, payal gulati",
+                "url": "https://www.informatica.si/index.php/informatica/article/view/4156",
+                "cluster": 42,
+                "weights": {
+                    "Authors": 4,
+                    "Keywords": 5
+                },
+                "scores": {
+                    "Publication year": 2023
+                }
+            },
+            {
+                "id": 48,
+                "label": "Comparative analysis of imputation methods in machine lea...",
+                "x": 0.3231999999999998,
+                "y": -0.9463,
+                "description": "<b>Comparative analysis of imputation methods in machine learning models</b><br><i>Science Technologies Innovation</i><br>Year: 2025<br>Authors: i. v. rozora, a. o. melnyk",
+                "url": "https://nti.ukrintei.ua/?page_id=6486&lang=en",
+                "cluster": 43,
+                "weights": {
+                    "Authors": 2,
+                    "Keywords": 0
+                },
+                "scores": {
+                    "Publication year": 2025
+                }
+            },
+            {
+                "id": 49,
+                "label": "Methods of multiple imputation",
+                "x": 0.26599999999999985,
+                "y": -0.964,
+                "description": "<b>Methods of multiple imputation</b><br>Year: 2025<br>Authors: assoc viktor skorniakov, iveta silkauskaitė supervisor",
+                "url": null,
+                "cluster": 44,
+                "weights": {
+                    "Authors": 2,
+                    "Keywords": 4
+                },
+                "scores": {
+                    "Publication year": 2025
+                }
+            },
+            {
+                "id": 50,
+                "label": "A Systematic Literature Review On Missing Values: Researc...",
+                "x": 0.20789999999999983,
+                "y": -0.9781,
+                "description": "<b>A Systematic Literature Review On Missing Values: Research Trends, Datasets, Methods and Frameworks</b><br><i>E3S Web of Conferences</i><br>Year: 2023<br>Authors: ismail setiawan, rahmat gernowo, budi warsito",
+                "url": "https://www.e3s-conferences.org/articles/e3sconf/abs/2023/85/e3sconf_icenis2023_02020/e3sconf_icenis2023_02020.html",
+                "cluster": 45,
+                "weights": {
+                    "Authors": 3,
+                    "Keywords": 5
+                },
+                "scores": {
+                    "Publication year": 2023
+                }
+            },
+            {
+                "id": 51,
+                "label": "Missing value imputation affects the performance of machi...",
+                "x": 0.14899999999999983,
+                "y": -0.9888,
+                "description": "<b>Missing value imputation affects the performance of machine learning: A review and analysis of the literature (2010–2021)</b><br><i>Informatics in Medicine Unlocked</i><br>Year: 2021<br>Authors: md ashraful alam, aishwariya dutta, md kamrul hasan, md tasnim jawad, sunanda das (+1 more)",
+                "url": "https://www.sciencedirect.com/science/article/pii/S2352914821002653",
+                "cluster": 46,
+                "weights": {
+                    "Authors": 6,
+                    "Keywords": 4
+                },
+                "scores": {
+                    "Publication year": 2021
+                }
+            },
+            {
+                "id": 52,
+                "label": "A systematic review of machine learning-based missing val...",
+                "x": 0.08959999999999983,
+                "y": -0.996,
+                "description": "<b>A systematic review of machine learning-based missing value imputation techniques</b><br><i>Data Technologies and Applications</i><br>Year: 2021<br>Authors: enayat rajabi, tressy thomas",
+                "url": "https://doi.org/10.1108/DTA-12-2020-0298",
+                "cluster": 47,
+                "weights": {
+                    "Authors": 2,
+                    "Keywords": 4
+                },
+                "scores": {
+                    "Publication year": 2021
+                }
+            },
+            {
+                "id": 53,
+                "label": "Systematic Review of Using Machine Learning in Imputing M...",
+                "x": 0.029899999999999812,
+                "y": -0.9996,
+                "description": "<b>Systematic Review of Using Machine Learning in Imputing Missing Values</b><br><i>IEEE Access</i><br>Year: 2022<br>Authors: fatimah sidi, hamidah ibrahim, lilly suriani affendey, navin kumar devaraj, zafienas che ani (+8 more)",
+                "url": "https://ieeexplore.ieee.org/document/9762231",
+                "cluster": 48,
+                "weights": {
+                    "Authors": 13,
+                    "Keywords": 6
+                },
+                "scores": {
+                    "Publication year": 2022
+                }
+            },
+            {
+                "id": 54,
+                "label": "Praleistų reikšmių įrašymo metodų palyginimas",
+                "x": -0.029900000000000187,
+                "y": -0.9996,
+                "description": "<b>Praleistų reikšmių įrašymo metodų palyginimas</b><br>Year: 2017<br>Authors: erika palubinskaitė",
+                "url": "https://eltalpykla.vdu.lt/1/34566",
+                "cluster": 49,
+                "weights": {
+                    "Authors": 1,
+                    "Keywords": 7
+                },
+                "scores": {
+                    "Publication year": 2017
+                }
+            },
+            {
+                "id": 55,
+                "label": "A survey of missing data imputation techniques: statistic...",
+                "x": -0.08960000000000017,
+                "y": -0.996,
+                "description": "<b>A survey of missing data imputation techniques: statistical methods, machine learning models, and GAN-based approaches</b><br><i>IAES International Journal of Artificial Intelligence</i><br>Year: 2025<br>Authors: ahmed mohameden, mohamedade farouk nanne, rifaa sadegh, mohamed lemine salihi",
+                "url": "https://doi.org/10.11591/IJAI.V14.I4.PP2876-2888",
+                "cluster": 5,
+                "weights": {
+                    "Authors": 4,
+                    "Keywords": 5
+                },
+                "scores": {
+                    "Publication year": 2025
+                }
+            },
+            {
+                "id": 56,
+                "label": "Missing Data Imputation: A Comprehensive Review",
+                "x": -0.14900000000000016,
+                "y": -0.9888,
+                "description": "<b>Missing Data Imputation: A Comprehensive Review</b><br><i>Journal of Computer and Communications</i><br>Year: 2024<br>Authors: abd el-raouf, osama a ghoneim, el-sayed atlam, mahmoud mohammed, ibrahim gad (+1 more)",
+                "url": "https://doi.org/10.4236/jcc.2024.1211004",
+                "cluster": 3,
+                "weights": {
+                    "Authors": 6,
+                    "Keywords": 5
+                },
+                "scores": {
+                    "Publication year": 2024
+                }
+            },
+            {
+                "id": 57,
+                "label": "Impute-VSS: A comprehensive web-based visualization and s...",
+                "x": -0.20790000000000017,
+                "y": -0.9781,
+                "description": "<b>Impute-VSS: A comprehensive web-based visualization and simulation suite for comparative data imputation and statistical evaluation</b><br><i>SoftwareX</i><br>Year: 2025<br>Authors: vartul shrivastava, shekhar shukla",
+                "url": "https://www.sciencedirect.com/science/article/pii/S2352711025000974?ref=pdf_download&fr=RR-2&rr=996d28b5cecbc23e",
+                "cluster": 50,
+                "weights": {
+                    "Authors": 2,
+                    "Keywords": 4
+                },
+                "scores": {
+                    "Publication year": 2025
+                }
+            },
+            {
+                "id": 58,
+                "label": "The Triumph of the City: How our Greatest Invention Makes...",
+                "x": -0.2660000000000002,
+                "y": -0.964,
+                "description": "<b>The Triumph of the City: How our Greatest Invention Makes us Richer, Smarter, Greener, Healthier, and Happier</b><br><i>The Social Science Journal</i><br>Year: 2012<br>Authors: paul e. hodges, scott alan carson",
+                "url": "https://doi.org/10.1016/J.SOSCIJ.2012.11.003",
+                "cluster": 51,
+                "weights": {
+                    "Authors": 2,
+                    "Keywords": 0
+                },
+                "scores": {
+                    "Publication year": 2012
+                }
+            },
+            {
+                "id": 59,
+                "label": "Statistical analysis with missing data",
+                "x": -0.32320000000000015,
+                "y": -0.9463,
+                "description": "<b>Statistical analysis with missing data</b><br><i>Statistical Analysis with Missing Data</i><br>Year: 2019<br>Authors: roderick j.a. little, donald b. rubin",
+                "url": "https://onlinelibrary.wiley.com/doi/book/10.1002/9781119482260",
+                "cluster": 52,
+                "weights": {
+                    "Authors": 2,
+                    "Keywords": 0
+                },
+                "scores": {
+                    "Publication year": 2019
+                }
+            },
+            {
+                "id": 60,
+                "label": "Missing data: Our view of the state of the art",
+                "x": -0.37920000000000015,
+                "y": -0.9253,
+                "description": "<b>Missing data: Our view of the state of the art</b><br><i>Psychological Methods</i><br>Year: 2002<br>Authors: john w. graham, josepn l. schafer",
+                "url": "https://doi.org/10.1037/1082-989X.7.2.147",
+                "cluster": 53,
+                "weights": {
+                    "Authors": 2,
+                    "Keywords": 0
+                },
+                "scores": {
+                    "Publication year": 2002
+                }
+            },
+            {
+                "id": 61,
+                "label": "Economic Convergence in EU NUTS 3 Regions: A Spatial Econ...",
+                "x": -0.4339000000000002,
+                "y": -0.901,
+                "description": "<b>Economic Convergence in EU NUTS 3 Regions: A Spatial Econometric Perspective</b><br><i>Sustainability 2020, Vol. 12, Page 6717</i><br>Year: 2020<br>Authors: domenica panzera, paolo postiglione, alfredo cartone",
+                "url": "https://www.mdpi.com/2071-1050/12/17/6717/htm https://www.mdpi.com/2071-1050/12/17/6717",
+                "cluster": 54,
+                "weights": {
+                    "Authors": 3,
+                    "Keywords": 5
+                },
+                "scores": {
+                    "Publication year": 2020
+                }
+            },
+            {
+                "id": 62,
+                "label": "Foreign direct investment, total factor productivity, and...",
+                "x": -0.48700000000000015,
+                "y": -0.8734,
+                "description": "<b>Foreign direct investment, total factor productivity, and economic growth: evidence in middle-income countries</b><br><i>Humanities and Social Sciences Communications</i><br>Year: 2024<br>Authors: nga thi thu do, khoa dang duong, hoa thanh phan le, ha pham",
+                "url": "https://www.nature.com/articles/s41599-024-03462-y",
+                "cluster": 55,
+                "weights": {
+                    "Authors": 4,
+                    "Keywords": 2
+                },
+                "scores": {
+                    "Publication year": 2024
+                }
+            },
+            {
+                "id": 63,
+                "label": "The relationship between unemployment and macroeconomic i...",
+                "x": -0.5384,
+                "y": -0.8427,
+                "description": "<b>The relationship between unemployment and macroeconomic indicators</b><br><i>SHS Web of Conferences</i><br>Year: 2023<br>Authors: kateřina kroutlová, eva kalinová",
+                "url": "https://doi.org/10.1051/SHSCONF/202316001008",
+                "cluster": 56,
+                "weights": {
+                    "Authors": 2,
+                    "Keywords": 0
+                },
+                "scores": {
+                    "Publication year": 2023
+                }
+            },
+            {
+                "id": 64,
+                "label": "Regional economic growth and unemployment in the European...",
+                "x": -0.5878,
+                "y": -0.809,
+                "description": "<b>Regional economic growth and unemployment in the European Union  – a spatio-temporal analysis at the NUTS-2 level (2013–2019)</b><br><i>Hungarian Geographical Bulletin</i><br>Year: 2023<br>Authors: mateusz jankiewicz",
+                "url": "https://ojs.mtak.hu/index.php/hungeobull/article/view/9035",
+                "cluster": 57,
+                "weights": {
+                    "Authors": 1,
+                    "Keywords": 6
+                },
+                "scores": {
+                    "Publication year": 2023
+                }
+            },
+            {
+                "id": 65,
+                "label": "Economic resiliency and recovery, lessons from the financ...",
+                "x": -0.6351,
+                "y": -0.7724,
+                "description": "<b>Economic resiliency and recovery, lessons from the financial crisis for the COVID-19 pandemic: A regional perspective from Central and Eastern Europe</b><br><i>International Review of Financial Analysis</i><br>Year: 2021<br>Authors: ali m. kutan, josef c. brada, paweł gajewski",
+                "url": "https://doi.org/10.1016/J.IRFA.2021.101658",
+                "cluster": 58,
+                "weights": {
+                    "Authors": 3,
+                    "Keywords": 5
+                },
+                "scores": {
+                    "Publication year": 2021
+                }
+            },
+            {
+                "id": 66,
+                "label": "XGBoost: A scalable tree boosting system",
+                "x": -0.6802,
+                "y": -0.7331,
+                "description": "<b>XGBoost: A scalable tree boosting system</b><br><i>Proceedings of the ACM SIGKDD International Conference on Knowledge Discovery and Data Mining</i><br>Year: 2016<br>Authors: carlos guestrin, tianqi chen",
+                "url": "https://dl.acm.org/doi/pdf/10.1145/2939672.2939785",
+                "cluster": 59,
+                "weights": {
+                    "Authors": 2,
+                    "Keywords": 1
+                },
+                "scores": {
+                    "Publication year": 2016
+                }
+            },
+            {
+                "id": 67,
+                "label": "XGBoost: Scalable GPU Accelerated Learning",
+                "x": -0.7228,
+                "y": -0.6911,
+                "description": "<b>XGBoost: Scalable GPU Accelerated Learning</b><br>Year: 2018<br>Authors: rory mitchell, thejaswi rao, eibe frank, andrey adinets",
+                "url": "https://github.com/dmlc/xgboost",
+                "cluster": 3,
+                "weights": {
+                    "Authors": 4,
+                    "Keywords": 5
+                },
+                "scores": {
+                    "Publication year": 2018
+                }
+            },
+            {
+                "id": 68,
+                "label": "GDP prediction of The Gambia using generative adversarial...",
+                "x": -0.7628,
+                "y": -0.6466,
+                "description": "<b>GDP prediction of The Gambia using generative adversarial networks</b><br><i>Frontiers in Artificial Intelligence</i><br>Year: 2025<br>Authors: ronald waweru mwangi, herbert imboga, alieu gibba, haruna jallow",
+                "url": "https://doi.org/10.3389/FRAI.2025.1546398/BIBTEX",
+                "cluster": 3,
+                "weights": {
+                    "Authors": 4,
+                    "Keywords": 6
+                },
+                "scores": {
+                    "Publication year": 2025
+                }
+            },
+            {
+                "id": 69,
+                "label": "Practical Bayesian Optimization of Machine Learning Algor...",
+                "x": -0.8001,
+                "y": -0.5998,
+                "description": "<b>Practical Bayesian Optimization of Machine Learning Algorithms</b><br><i>Advances in Neural Information Processing Systems</i><br>Year: 2012<br>Authors: jasper snoek, hugo larochelle, ryan p. adams",
+                "url": "https://arxiv.org/pdf/1206.2944",
+                "cluster": 60,
+                "weights": {
+                    "Authors": 3,
+                    "Keywords": 0
+                },
+                "scores": {
+                    "Publication year": 2012
+                }
+            },
+            {
+                "id": 70,
+                "label": "Greedy function approximation: A gradient boosting machine.",
+                "x": -0.8346,
+                "y": -0.5509,
+                "description": "<b>Greedy function approximation: A gradient boosting machine.</b><br><i>https://doi.org/10.1214/aos/1013203451</i><br>Year: 2001<br>Authors: jerome h. friedman",
+                "url": "https://projecteuclid.org/journals/annals-of-statistics/volume-29/issue-5/Greedy-function-approximation-A-gradient-boosting-machine/10.1214/aos/1013203451.full https://projecteuclid.org/journals/annals-of-statistics/volume-29/issue-5/Greedy-function-approximation-A-gradient-boosting-machine/10.1214/aos/1013203451.short",
+                "cluster": 6,
+                "weights": {
+                    "Authors": 1,
+                    "Keywords": 10
+                },
+                "scores": {
+                    "Publication year": 2001
+                }
+            },
+            {
+                "id": 71,
+                "label": "XGBoost: A scalable tree boosting system",
+                "x": -0.866,
+                "y": -0.49999999999999983,
+                "description": "<b>XGBoost: A scalable tree boosting system</b><br><i>Proceedings of the ACM SIGKDD International Conference on Knowledge Discovery and Data Mining</i><br>Year: 2016<br>Authors: carlos guestrin, tianqi chen",
+                "url": "https://dl.acm.org/doi/pdf/10.1145/2939672.2939785",
+                "cluster": 61,
+                "weights": {
+                    "Authors": 2,
+                    "Keywords": 1
+                },
+                "scores": {
+                    "Publication year": 2016
+                }
+            },
+            {
+                "id": 72,
+                "label": "Hyperparameters and Tuning Strategies for Random Forest",
+                "x": -0.8944,
+                "y": -0.4472999999999998,
+                "description": "<b>Hyperparameters and Tuning Strategies for Random Forest</b><br><i>Wiley Interdisciplinary Reviews: Data Mining and Knowledge Discovery</i><br>Year: 2019<br>Authors: philipp probst, marvin wright, anne-laure boulesteix",
+                "url": "http://arxiv.org/abs/1804.03515 http://dx.doi.org/10.1002/widm.1301",
+                "cluster": 62,
+                "weights": {
+                    "Authors": 3,
+                    "Keywords": 7
+                },
+                "scores": {
+                    "Publication year": 2019
+                }
+            },
+            {
+                "id": 73,
+                "label": "COMPARATIVE ANALYSIS OF STOCHASTIC MODELS AND MACHINE LEA...",
+                "x": -0.9195,
+                "y": -0.39299999999999985,
+                "description": "<b>COMPARATIVE ANALYSIS OF STOCHASTIC MODELS AND MACHINE LEARNING ALGORITHMS FOR INFLATION RATE PREDICTION IN NIGERIA</b><br><i>Science World Journal</i><br>Year: 2025<br>Authors: edesiri bridget nkemnole, simeon oyelami, * abiodun",
+                "url": "https://scienceworldjournal.org/article/view/24291",
+                "cluster": 2,
+                "weights": {
+                    "Authors": 3,
+                    "Keywords": 5
+                },
+                "scores": {
+                    "Publication year": 2025
+                }
+            },
+            {
+                "id": 74,
+                "label": "Forecasting Foreign Direct Investment Inflow to Banglades...",
+                "x": -0.9414,
+                "y": -0.3372999999999998,
+                "description": "<b>Forecasting Foreign Direct Investment Inflow to Bangladesh: Using an Autoregressive Integrated Moving Average and a Machine Learning-Based Random Forest Approach</b><br><i>Journal of Risk and Financial Management 2024, Vol. 17, Page 451</i><br>Year: 2024<br>Authors: md monirul islam, md mamunur rashid, kentaka aruga, arifa jannat",
+                "url": "https://www.mdpi.com/1911-8074/17/10/451/htm https://www.mdpi.com/1911-8074/17/10/451",
+                "cluster": 2,
+                "weights": {
+                    "Authors": 4,
+                    "Keywords": 5
+                },
+                "scores": {
+                    "Publication year": 2024
+                }
+            },
+            {
+                "id": 75,
+                "label": "Predicting real estate prices with machine learning",
+                "x": -0.9599,
+                "y": -0.2803999999999998,
+                "description": "<b>Predicting real estate prices with machine learning</b><br><i>Vilniaus universitetas</i><br>Year: 2025<br>Authors: blessing oritsewenyimi agadagba",
+                "url": null,
+                "cluster": 63,
+                "weights": {
+                    "Authors": 1,
+                    "Keywords": 0
+                },
+                "scores": {
+                    "Publication year": 2025
+                }
+            },
+            {
+                "id": 76,
+                "label": "Randomization Can Reduce Both Bias and Variance: A Case S...",
+                "x": -0.9749,
+                "y": -0.22249999999999984,
+                "description": "<b>Randomization Can Reduce Both Bias and Variance: A Case Study in Random Forests</b><br><i>Journal of Machine Learning Research</i><br>Year: 2025<br>Authors: rahul mazumder, brian liu, florence d'alche-buc",
+                "url": "http://jmlr.org/papers/v26/24-0255.html.",
+                "cluster": 7,
+                "weights": {
+                    "Authors": 3,
+                    "Keywords": 2
+                },
+                "scores": {
+                    "Publication year": 2025
+                }
+            },
+            {
+                "id": 77,
+                "label": "Randomization Can Reduce Both Bias and Variance: A Case S...",
+                "x": -0.9865,
+                "y": -0.16379999999999983,
+                "description": "<b>Randomization Can Reduce Both Bias and Variance: A Case Study in Random Forests</b><br><i>Journal of Machine Learning Research</i><br>Year: 2025<br>Authors: rahul mazumder, brian liu, florence d'alche-buc",
+                "url": "http://jmlr.org/papers/v26/24-0255.html.",
+                "cluster": 7,
+                "weights": {
+                    "Authors": 3,
+                    "Keywords": 2
+                },
+                "scores": {
+                    "Publication year": 2025
+                }
+            },
+            {
+                "id": 78,
+                "label": "Evolution of Random Forest from Decision Tree and Bagging...",
+                "x": -0.9945,
+                "y": -0.10449999999999983,
+                "description": "<b>Evolution of Random Forest from Decision Tree and Bagging: A Bias-Variance Perspective</b><br><i>Dhaka University Journal of Applied Science and Engineering </i><br>Year: 2022<br>Authors: muhammad ibrahim",
+                "url": "https://www.banglajol.info/index.php/DUJASE/article/view/62888",
+                "cluster": 8,
+                "weights": {
+                    "Authors": 1,
+                    "Keywords": 7
+                },
+                "scores": {
+                    "Publication year": 2022
+                }
+            },
+            {
+                "id": 79,
+                "label": "Analysis and Forecasting of Energy Data and GDP Based on ...",
+                "x": -0.999,
+                "y": -0.044899999999999815,
+                "description": "<b>Analysis and Forecasting of Energy Data and GDP Based on Pearson Correlation Analysis-Random Forest Algorithm</b><br><i>Advances in Economics, Management and Political Sciences</i><br>Year: 2024<br>Authors: jiahong he",
+                "url": "https://www.ewadirect.com/proceedings/aemps/article/view/12128",
+                "cluster": 64,
+                "weights": {
+                    "Authors": 1,
+                    "Keywords": 3
+                },
+                "scores": {
+                    "Publication year": 2024
+                }
+            },
+            {
+                "id": 80,
+                "label": "Privacy concerns in tourism: a systematic literature revi...",
+                "x": -0.9999,
+                "y": 0.015000000000000182,
+                "description": "<b>Privacy concerns in tourism: a systematic literature review using machine learning approach and bibliometric analysis</b><br><i>Tourism Review</i><br>Year: 2024<br>Authors: hitesh sharma, zuopeng justin zhang, ikram jebabli, praveen ranjan srivastava, sajjad m. jasimuddin",
+                "url": "https://dx.doi.org/10.1108/TR-10-2022-0517",
+                "cluster": 65,
+                "weights": {
+                    "Authors": 5,
+                    "Keywords": 6
+                },
+                "scores": {
+                    "Publication year": 2024
+                }
+            },
+            {
+                "id": 81,
+                "label": "Application of Artificial Neural Networks in Economic and...",
+                "x": -0.9972,
+                "y": 0.07470000000000017,
+                "description": "<b>Application of Artificial Neural Networks in Economic and Financial Sciences</b><br><i>Research and Applications of Digital Signal Processing [Working Title]</i><br>Year: 2025<br>Authors: azadeh mehrabian, roya seifipour",
+                "url": "https://doi.org/10.5772/INTECHOPEN.1007604",
+                "cluster": 66,
+                "weights": {
+                    "Authors": 2,
+                    "Keywords": 0
+                },
+                "scores": {
+                    "Publication year": 2025
+                }
+            },
+            {
+                "id": 82,
+                "label": "An Artificial Intelligent Methodology-based Bayesian Beli...",
+                "x": -0.9909,
+                "y": 0.13420000000000018,
+                "description": "<b>An Artificial Intelligent Methodology-based Bayesian Belief Networks Constructing for Big Data Economic Indicators Prediction</b><br><i>International Journal of Advanced Computer Science and Applications</i><br>Year: 2023<br>Authors: yi shang, chanmann lim, fernando torre mora, adil al-azzawi",
+                "url": "https://doi.org/10.14569/IJACSA.2023.0140588",
+                "cluster": 67,
+                "weights": {
+                    "Authors": 4,
+                    "Keywords": 5
+                },
+                "scores": {
+                    "Publication year": 2023
+                }
+            },
+            {
+                "id": 83,
+                "label": "Review of automated time series forecasting pipelines",
+                "x": -0.9811,
+                "y": 0.19330000000000017,
+                "description": "<b>Review of automated time series forecasting pipelines</b><br><i>Wiley Interdisciplinary Reviews: Data Mining and Knowledge Discovery</i><br>Year: 2022<br>Authors: kaleb phipps, marian turowski, martin rätz, ralf mikut, stefan meisenbacher (+2 more)",
+                "url": "http://arxiv.org/abs/2202.01712 http://dx.doi.org/10.1002/widm.1475",
+                "cluster": 68,
+                "weights": {
+                    "Authors": 7,
+                    "Keywords": 17
+                },
+                "scores": {
+                    "Publication year": 2022
+                }
+            },
+            {
+                "id": 84,
+                "label": "The application of machine learning for demand prediction...",
+                "x": -0.9678,
+                "y": 0.25160000000000016,
+                "description": "<b>The application of machine learning for demand prediction under macroeconomic volatility: a systematic literature review</b><br><i>Management Review Quarterly 2024</i><br>Year: 2024<br>Authors: gerd nufer, michael lingenfelder, manuel muth",
+                "url": "https://link.springer.com/article/10.1007/s11301-024-00447-8",
+                "cluster": 69,
+                "weights": {
+                    "Authors": 3,
+                    "Keywords": 9
+                },
+                "scores": {
+                    "Publication year": 2024
+                }
+            },
+            {
+                "id": 85,
+                "label": "Predictive Analytics and Machine Learning for Real-Time S...",
+                "x": -0.9511,
+                "y": 0.30900000000000016,
+                "description": "<b>Predictive Analytics and Machine Learning for Real-Time Supply Chain Risk Mitigation and Agility</b><br><i>Sustainability 2023, Vol. 15, Page 15088</i><br>Year: 2023<br>Authors: abeer aljohani",
+                "url": "https://www.mdpi.com/2071-1050/15/20/15088/htm https://www.mdpi.com/2071-1050/15/20/15088",
+                "cluster": 70,
+                "weights": {
+                    "Authors": 1,
+                    "Keywords": 6
+                },
+                "scores": {
+                    "Publication year": 2023
+                }
+            },
+            {
+                "id": 86,
+                "label": "Evaluating the Role of Machine Learning in Economics: A C...",
+                "x": -0.9309,
+                "y": 0.3653000000000002,
+                "description": "<b>Evaluating the Role of Machine Learning in Economics: A Cutting-Edge Addition or Rhetorical Device?</b><br><i>Studies in Logic, Grammar and Rhetoric</i><br>Year: 2023<br>Authors: sławomir czech",
+                "url": "https://doi.org/10.2478/SLGR-2023-0014",
+                "cluster": 71,
+                "weights": {
+                    "Authors": 1,
+                    "Keywords": 3
+                },
+                "scores": {
+                    "Publication year": 2023
+                }
+            },
+            {
+                "id": 87,
+                "label": "Application of Machine Learning in Supply Chain Managemen...",
+                "x": -0.9074,
+                "y": 0.42040000000000016,
+                "description": "<b>Application of Machine Learning in Supply Chain Management: A Comprehensive Overview of the Main Areas</b><br><i>Mathematical Problems in Engineering</i><br>Year: 2021<br>Authors: hadi rezaei vandchali, erfan babaee tirkolaee, farzaneh mansoori mooseloo, saeid sadeghi, samira aeini",
+                "url": "https://doi.org/10.1155/2021/1476043",
+                "cluster": 72,
+                "weights": {
+                    "Authors": 5,
+                    "Keywords": 0
+                },
+                "scores": {
+                    "Publication year": 2021
+                }
+            },
+            {
+                "id": 88,
+                "label": "Application of Machine Learning in Supply Chain Managemen...",
+                "x": -0.8806,
+                "y": 0.47390000000000015,
+                "description": "<b>Application of Machine Learning in Supply Chain Management: A Comprehensive Overview of the Main Areas</b><br><i>Mathematical Problems in Engineering</i><br>Year: 2021<br>Authors: hadi rezaei vandchali, erfan babaee tirkolaee, farzaneh mansoori mooseloo, saeid sadeghi, samira aeini",
+                "url": "https://onlinelibrary.wiley.com/doi/full/10.1155/2021/1476043 https://onlinelibrary.wiley.com/doi/abs/10.1155/2021/1476043 https://onlinelibrary.wiley.com/doi/10.1155/2021/1476043",
+                "cluster": 73,
+                "weights": {
+                    "Authors": 5,
+                    "Keywords": 0
+                },
+                "scores": {
+                    "Publication year": 2021
+                }
+            },
+            {
+                "id": 89,
+                "label": "Application of Machine Learning in Supply Chain Managemen...",
+                "x": -0.8507,
+                "y": 0.5257,
+                "description": "<b>Application of Machine Learning in Supply Chain Management: A Comprehensive Overview of the Main Areas</b><br><i>Mathematical Problems in Engineering</i><br>Year: 2021<br>Authors: hadi rezaei vandchali, erfan babaee tirkolaee, farzaneh mansoori mooseloo, saeid sadeghi, samira aeini",
+                "url": "https://onlinelibrary.wiley.com/doi/full/10.1155/2021/1476043 https://onlinelibrary.wiley.com/doi/abs/10.1155/2021/1476043 https://onlinelibrary.wiley.com/doi/10.1155/2021/1476043",
+                "cluster": 74,
+                "weights": {
+                    "Authors": 5,
+                    "Keywords": 0
+                },
+                "scores": {
+                    "Publication year": 2021
+                }
+            },
+            {
+                "id": 90,
+                "label": "DATA SCIENCE METHODS AND MODELS IN MODERN ECONOMY",
+                "x": -0.8177,
+                "y": 0.5756,
+                "description": "<b>DATA SCIENCE METHODS AND MODELS IN MODERN ECONOMY</b><br><i>Економічний простір</i><br>Year: 2024<br>Authors: roman reznikov, svitlana turlakova",
+                "url": "https://prostir.pdaba.dp.ua/index.php/journal/article/view/1539",
+                "cluster": 75,
+                "weights": {
+                    "Authors": 2,
+                    "Keywords": 5
+                },
+                "scores": {
+                    "Publication year": 2024
+                }
+            },
+            {
+                "id": 91,
+                "label": "Leveraging reinforcement learning for advanced financial ...",
+                "x": -0.7818,
+                "y": 0.6235,
+                "description": "<b>Leveraging reinforcement learning for advanced financial planning for effective personalization in economic forecasting and savings strategies</b><br><i>2024 15th International Conference on Computing Communication and Networking Technologies, ICCCNT 2024</i><br>Year: 2024<br>Authors: sarika mulukuntla, anandaganesh balakrishnan, p. preethi, rajiv avacharmal, piyush ranjan (+1 more)",
+                "url": "https://doi.org/10.1109/ICCCNT61001.2024.10725494",
+                "cluster": 76,
+                "weights": {
+                    "Authors": 6,
+                    "Keywords": 5
+                },
+                "scores": {
+                    "Publication year": 2024
+                }
+            },
+            {
+                "id": 92,
+                "label": "Review on the influence of machine learning methods and d...",
+                "x": -0.7431,
+                "y": 0.6691,
+                "description": "<b>Review on the influence of machine learning methods and data science on the economics</b><br><i>Applied and Computational Engineering</i><br>Year: 2023<br>Authors: zhekai liu",
+                "url": "https://www.ewadirect.com/proceedings/ace/article/view/4813",
+                "cluster": 4,
+                "weights": {
+                    "Authors": 1,
+                    "Keywords": 4
+                },
+                "scores": {
+                    "Publication year": 2023
+                }
+            },
+            {
+                "id": 93,
+                "label": "The role of artificial intelligence and machine learning ...",
+                "x": -0.7018,
+                "y": 0.7124,
+                "description": "<b>The role of artificial intelligence and machine learning in forecasting economic trends</b><br><i>Data and Metadata</i><br>Year: 2024<br>Authors: svitlana marushchak, petar halachev, sergii pakhomov, iryna fadyeyeva, nursultan zharkenov",
+                "url": "https://dm.ageditor.ar/index.php/dm/article/view/247/825 https://dm.ageditor.ar/index.php/dm/article/view/247",
+                "cluster": 77,
+                "weights": {
+                    "Authors": 5,
+                    "Keywords": 9
+                },
+                "scores": {
+                    "Publication year": 2024
+                }
+            },
+            {
+                "id": 94,
+                "label": "Predicting Financial Enterprise Stocks and Economic Data ...",
+                "x": -0.6579,
+                "y": 0.7531,
+                "description": "<b>Predicting Financial Enterprise Stocks and Economic Data Trends Using Machine Learning Time Series Analysis</b><br>Year: 2024<br>Authors: zeqiu xu, runze song, haotian zheng, jiang wu, lingfeng guo",
+                "url": "https://www.preprints.org/manuscript/202407.0895/v1",
+                "cluster": 78,
+                "weights": {
+                    "Authors": 5,
+                    "Keywords": 5
+                },
+                "scores": {
+                    "Publication year": 2024
+                }
+            },
+            {
+                "id": 95,
+                "label": "ECONOMIC FORECASTING USING ARTIFICIAL INTELLIGENCE MODELS...",
+                "x": -0.6117,
+                "y": 0.7911,
+                "description": "<b>ECONOMIC FORECASTING USING ARTIFICIAL INTELLIGENCE MODELS AND ALGORITHMS IN THE CASE OF UZBEKISTAN</b><br>Year: 2023<br>Authors: guzal absalamova, diyora absalamova, ulugbek bekmurodov",
+                "url": null,
+                "cluster": 79,
+                "weights": {
+                    "Authors": 3,
+                    "Keywords": 0
+                },
+                "scores": {
+                    "Publication year": 2023
+                }
+            },
+            {
+                "id": 96,
+                "label": "Regional Economic Development in the AI Era: Methods, Opp...",
+                "x": -0.5633,
+                "y": 0.8262,
+                "description": "<b>Regional Economic Development in the AI Era: Methods, Opportunities, and Challenges</b><br><i>Journal of Regional Economics</i><br>Year: 2023<br>Authors: robertas damaševičius",
+                "url": "https://doi.org/10.58567/jre02020001",
+                "cluster": 80,
+                "weights": {
+                    "Authors": 1,
+                    "Keywords": 0
+                },
+                "scores": {
+                    "Publication year": 2023
+                }
+            },
+            {
+                "id": 97,
+                "label": "TimeGPT-1",
+                "x": -0.5129,
+                "y": 0.8584,
+                "description": "<b>TimeGPT-1</b><br>Year: 2023<br>Authors: azul garza, cristian challu, max mergenthaler-canseco",
+                "url": "http://arxiv.org/abs/2310.03589",
+                "cluster": 81,
+                "weights": {
+                    "Authors": 3,
+                    "Keywords": 0
+                },
+                "scores": {
+                    "Publication year": 2023
+                }
+            },
+            {
+                "id": 98,
+                "label": "The Economic Resilience Index Assessing the ability of EU...",
+                "x": -0.46059999999999984,
+                "y": 0.8876,
+                "description": "<b>The Economic Resilience Index Assessing the ability of EU economies to thrive in times of change</b><br>Year: 2023<br>Authors: le lannou, l-a korinek, l barth, n demitry, l bertram (+1 more)",
+                "url": null,
+                "cluster": 82,
+                "weights": {
+                    "Authors": 6,
+                    "Keywords": 0
+                },
+                "scores": {
+                    "Publication year": 2023
+                }
+            },
+            {
+                "id": 99,
+                "label": "Comparative Analysis of Machine Learning Algorithms for I...",
+                "x": -0.40669999999999984,
+                "y": 0.9135,
+                "description": "<b>Comparative Analysis of Machine Learning Algorithms for Inflation Rate Classification and Economic Trend Forecasting</b><br><i>ACM International Conference Proceeding Series</i><br>Year: 2023<br>Authors: manzura buranova, naima khashimova",
+                "url": "https://doi.org/10.1145/3644713.3644749",
+                "cluster": 83,
+                "weights": {
+                    "Authors": 2,
+                    "Keywords": 0
+                },
+                "scores": {
+                    "Publication year": 2023
+                }
+            },
+            {
+                "id": 100,
+                "label": "Regional Economic Disparities in Europe: Time-Series Clus...",
+                "x": -0.3513999999999998,
+                "y": 0.9362,
+                "description": "<b>Regional Economic Disparities in Europe: Time-Series Clustering of NUTS 3 Regions</b><br><i>International Regional Science Review</i><br>Year: 2023<br>Authors: cristina del campo, ana maría lópez-villuendas",
+                "url": "https://doi.org/10.1177/01600176221125703",
+                "cluster": 9,
+                "weights": {
+                    "Authors": 2,
+                    "Keywords": 4
+                },
+                "scores": {
+                    "Publication year": 2023
+                }
+            },
+            {
+                "id": 101,
+                "label": "Prediction Models and Testing of Resilience in RegionsCov...",
+                "x": -0.29479999999999984,
+                "y": 0.9556,
+                "description": "<b>Prediction Models and Testing of Resilience in RegionsCovid19 Economic Impact in USA Counties Case Study</b><br><i>Region</i><br>Year: 2023<br>Authors: eleni gaki, charalampos manousiadis",
+                "url": "https://doi.org/10.18335/region.v10i1.449",
+                "cluster": 84,
+                "weights": {
+                    "Authors": 2,
+                    "Keywords": 9
+                },
+                "scores": {
+                    "Publication year": 2023
+                }
+            },
+            {
+                "id": 102,
+                "label": "The Use of Big Data in the Field of Official Statistics (...",
+                "x": -0.23709999999999984,
+                "y": 0.9715,
+                "description": "<b>The Use of Big Data in the Field of Official Statistics (Descriptive Exploratory Study)</b><br>Year: 2022<br>Authors: mohammad al-ansari, researcher / munthir",
+                "url": null,
+                "cluster": 85,
+                "weights": {
+                    "Authors": 2,
+                    "Keywords": 0
+                },
+                "scores": {
+                    "Publication year": 2022
+                }
+            },
+            {
+                "id": 103,
+                "label": "Predicting economic resilience of territories in Italy du...",
+                "x": -0.17859999999999984,
+                "y": 0.9839,
+                "description": "<b>Predicting economic resilience of territories in Italy during the COVID-19 first lockdown</b><br><i>Expert Systems with Applications</i><br>Year: 2023<br>Authors: francesco pierri, andrea flori, giovanni bonaccorsi, francesco scotti, fabio pammolli",
+                "url": "https://doi.org/10.1016/j.eswa.2023.120803",
+                "cluster": 86,
+                "weights": {
+                    "Authors": 5,
+                    "Keywords": 6
+                },
+                "scores": {
+                    "Publication year": 2023
+                }
+            },
+            {
+                "id": 104,
+                "label": "European Union Societal Resilience Prediction Harnessing ...",
+                "x": -0.11939999999999984,
+                "y": 0.9928,
+                "description": "<b>European Union Societal Resilience Prediction Harnessing Data Science to Forecast Public Response in Europe</b><br>Year: 2024<br>Authors: hossein soukhtanlou, grzegorz chrupała, samaneh khoshrou",
+                "url": "https://bard.google.com/",
+                "cluster": 87,
+                "weights": {
+                    "Authors": 3,
+                    "Keywords": 0
+                },
+                "scores": {
+                    "Publication year": 2024
+                }
+            },
+            {
+                "id": 105,
+                "label": "Regional Economic Disparities in Europe: Time-Series Clus...",
+                "x": -0.05979999999999981,
+                "y": 0.9982,
+                "description": "<b>Regional Economic Disparities in Europe: Time-Series Clustering of NUTS 3 Regions</b><br><i>International Regional Science Review</i><br>Year: 2023<br>Authors: cristina del campo, ana maría lópez-villuendas",
+                "url": "https://doi.org/10.1177/01600176221125703",
+                "cluster": 9,
+                "weights": {
+                    "Authors": 2,
+                    "Keywords": 4
+                },
+                "scores": {
+                    "Publication year": 2023
+                }
+            }
+        ],
+        "links": [
+            {
+                "source_id": 10,
+                "target_id": 46,
+                "strength": 2
+            },
+            {
+                "source_id": 10,
+                "target_id": 56,
+                "strength": 2
+            },
+            {
+                "source_id": 10,
+                "target_id": 73,
+                "strength": 2
+            },
+            {
+                "source_id": 16,
+                "target_id": 24,
+                "strength": 3
+            },
+            {
+                "source_id": 16,
+                "target_id": 56,
+                "strength": 2
+            },
+            {
+                "source_id": 17,
+                "target_id": 70,
+                "strength": 4
+            },
+            {
+                "source_id": 24,
+                "target_id": 26,
+                "strength": 3
+            },
+            {
+                "source_id": 24,
+                "target_id": 38,
+                "strength": 2
+            },
+            {
+                "source_id": 24,
+                "target_id": 40,
+                "strength": 2
+            },
+            {
+                "source_id": 24,
+                "target_id": 45,
+                "strength": 2
+            },
+            {
+                "source_id": 24,
+                "target_id": 56,
+                "strength": 2
+            },
+            {
+                "source_id": 27,
+                "target_id": 37,
+                "strength": 4
+            },
+            {
+                "source_id": 27,
+                "target_id": 92,
+                "strength": 2
+            },
+            {
+                "source_id": 31,
+                "target_id": 78,
+                "strength": 3
+            },
+            {
+                "source_id": 37,
+                "target_id": 92,
+                "strength": 2
+            },
+            {
+                "source_id": 38,
+                "target_id": 56,
+                "strength": 2
+            },
+            {
+                "source_id": 43,
+                "target_id": 44,
+                "strength": 2
+            },
+            {
+                "source_id": 43,
+                "target_id": 55,
+                "strength": 2
+            },
+            {
+                "source_id": 44,
+                "target_id": 55,
+                "strength": 2
+            },
+            {
+                "source_id": 46,
+                "target_id": 56,
+                "strength": 2
+            },
+            {
+                "source_id": 55,
+                "target_id": 56,
+                "strength": 2
+            },
+            {
+                "source_id": 56,
+                "target_id": 68,
+                "strength": 2
+            },
+            {
+                "source_id": 67,
+                "target_id": 68,
+                "strength": 2
+            },
+            {
+                "source_id": 73,
+                "target_id": 74,
+                "strength": 2
+            },
+            {
+                "source_id": 76,
+                "target_id": 77,
+                "strength": 2
+            },
+            {
+                "source_id": 100,
+                "target_id": 105,
+                "strength": 4
+            }
+        ]
+    }
+}

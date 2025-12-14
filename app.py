@@ -92,7 +92,7 @@ DB_CONFIG = {
     'user': os.environ.get('MYSQL_USER'),
     'password': os.environ.get('MYSQL_PASSWORD'),
     'database': os.environ.get('MYSQL_DATABASE'),
-    'connect_timeout': 30,  # Increased from 10 to 30 seconds
+    'connect_timeout': 10,
     'ssl_disabled': False,
     'autocommit': True,
     'charset': 'utf8mb4',
@@ -131,171 +131,37 @@ if not MYSQL_ENABLED:
     print("MySQL environment variables not set - comments feature will be disabled")
     print("Required: MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE")
 
-# Database connection manager with pooling and retry logic
+# Database connection manager
 class DatabaseManager:
-    def __init__(self, config, enabled=True, pool_size=20):  # Increased to 20 for large datasets
-        self.config = config.copy()
-        self.enabled = enabled
-        self.pool = None
-        self._active_connections = 0
-
-        if self.enabled:
-            try:
-                # Create connection pool with larger size for concurrent operations
-                pool_config = self.config.copy()
-                pool_config['pool_name'] = 'mypool'
-                pool_config['pool_size'] = pool_size
-                pool_config['pool_reset_session'] = True
-                # Allow connections to be recycled after use
-                pool_config['autocommit'] = False  # Better control over transactions
-
-                # Create the pool
-                from mysql.connector import pooling
-                self.pool = pooling.MySQLConnectionPool(**pool_config)
-                print(f"MySQL connection pool created with {pool_size} connections")
-            except Error as e:
-                print(f"Failed to create connection pool: {e}")
-                self.pool = None
-
-    def get_connection(self, max_retries=1):  # Reduced retries to avoid piling up
-        """Get a connection from the pool"""
-        if not self.enabled:
-            print("[DB] MySQL is disabled - environment variables not configured")
-            return None
-
-        if self.pool is None:
-            print("[DB] Connection pool not available")
-            return None
-
-        for attempt in range(max_retries):
-            try:
-                # Get connection from pool - this will wait if pool is exhausted
-                # But we don't want to wait forever, so it will timeout
-                connection = self.pool.get_connection()
-
-                # Verify connection is alive
-                if connection.is_connected():
-                    # Configure session settings for large data and long operations
-                    try:
-                        cursor = connection.cursor()
-                        # Note: max_allowed_packet is often read-only at session level
-                        # It's configured globally in pool creation or server config
-                        cursor.execute("SET SESSION wait_timeout=600")  # 10 minutes
-                        cursor.execute("SET SESSION net_read_timeout=300")  # 5 minutes
-                        cursor.execute("SET SESSION net_write_timeout=300")  # 5 minutes
-                        cursor.execute("SET SESSION interactive_timeout=600")  # 10 minutes
-                        cursor.close()
-                    except Exception as e:
-                        # Non-critical - continue even if session variables can't be set
-                        pass
-
-                    print(f"[DB] Connection obtained from pool")
-                    return connection
-                else:
-                    print(f"[DB] Connection is not alive, attempting to reconnect...")
-                    # Connection is dead, try to reconnect
-                    try:
-                        connection.reconnect(attempts=2, delay=1)
-                        if connection.is_connected():
-                            print(f"[DB] Reconnection successful")
-                            return connection
-                    except Exception as reconnect_err:
-                        print(f"[DB] Reconnection failed: {reconnect_err}")
-                        pass
-
-            except mysql.connector.errors.PoolError as e:
-                # Pool exhausted - don't retry, just fail fast
-                print(f"[DB] Pool error: {e}")
-                print(f"[DB] Pool status: {self.get_pool_status()}")
-                return None
-
-            except Error as e:
-                print(f"[DB] Connection attempt {attempt + 1}/{max_retries} failed: {e}")
-                if "pool exhausted" in str(e).lower():
-                    # Don't retry on pool exhausted
-                    print(f"[DB] Pool exhausted - not retrying")
-                    return None
-                if attempt < max_retries - 1:
-                    import time
-                    time.sleep(1)  # Wait before retry
-                else:
-                    print(f"[DB] All connection attempts failed")
-                    return None
-
-        return None
-
-    def close_connection(self, connection):
-        """Return connection to pool"""
-        if connection:
-            try:
-                if connection.is_connected():
-                    connection.close()  # Returns to pool, doesn't actually close
-                    print(f"Connection returned to pool")
-            except Exception as e:
-                print(f"Error closing connection: {e}")
-                pass
-
-    def get_pool_status(self):
-        """Get current pool status for debugging"""
-        if self.pool:
-            try:
-                # Try to get pool size info
-                return f"Pool size: {self.pool._pool_size}, Active: {self._active_connections}"
-            except:
-                return "Pool status unavailable"
-        return "No pool"
-
-    def connection(self):
-        """Context manager for automatic connection cleanup"""
-        return DatabaseConnection(self)
-
-
-class DatabaseConnection:
-    """Context manager for database connections"""
-    def __init__(self, db_manager):
-        self.db_manager = db_manager
+    def __init__(self, config, enabled=True):
+        self.config = config
         self.connection = None
-        self.cursor = None
+        self.enabled = enabled
 
-    def __enter__(self):
-        """Get connection when entering context"""
-        self.connection = self.db_manager.get_connection()
-        if self.connection:
-            print(f"[DB] Connection acquired from pool")
-        return self
+    def get_connection(self):
+        if not self.enabled:
+            print("MySQL is disabled - environment variables not configured")
+            return None
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        """Cleanup when exiting context"""
-        if self.cursor:
-            try:
-                self.cursor.close()
-                print(f"[DB] Cursor closed")
-            except:
-                pass
+        try:
+            # Always create a fresh connection for each request to avoid stale connection issues
+            # This is simpler and more reliable than connection pooling for this use case
+            if self.connection is not None:
+                try:
+                    self.connection.close()
+                except:
+                    pass
 
-        if self.connection:
-            try:
-                if exc_type:
-                    # Rollback on error
-                    self.connection.rollback()
-                    print(f"[DB] Transaction rolled back due to error: {exc_val}")
-                else:
-                    # Commit on success
-                    self.connection.commit()
-                    print(f"[DB] Transaction committed")
+            self.connection = mysql.connector.connect(**self.config)
+            return self.connection
+        except Error as e:
+            print(f"Database connection error: {e}")
+            self.connection = None
+            return None
 
-                self.db_manager.close_connection(self.connection)
-            except Exception as e:
-                print(f"[DB] Error during cleanup: {e}")
-
-        return False  # Don't suppress exceptions
-
-    def get_cursor(self, dictionary=False):
-        """Get a cursor for this connection"""
-        if self.connection:
-            self.cursor = self.connection.cursor(dictionary=dictionary)
-            return self.cursor
-        return None
+    def close_connection(self):
+        if self.connection and self.connection.is_connected():
+            self.connection.close()
 
 # Initialize database manager - only if MySQL is properly configured
 db_manager = DatabaseManager(DB_CONFIG, enabled=MYSQL_ENABLED)
@@ -307,89 +173,89 @@ def init_database_tables():
         return
 
     try:
-        print("[DB] Initializing database tables...")
-        with db_manager.connection() as db_conn:
-            if not db_conn.connection:
-                print("[DB] Failed to get connection for table initialization")
-                return
+        connection = db_manager.get_connection()
+        if not connection:
+            return
 
-            cursor = db_conn.get_cursor()
+        cursor = connection.cursor()
 
-            # Create imputacijos_rezultatai table
+        # Create imputacijos_rezultatai table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS imputacijos_rezultatai (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                rezultato_id VARCHAR(36) UNIQUE NOT NULL,
+                originalus_failas VARCHAR(255) NOT NULL,
+                imputuotas_failas VARCHAR(255) NOT NULL,
+                modelio_tipas ENUM('random_forest', 'xgboost') NOT NULL,
+                n_estimators INT NOT NULL,
+                random_state INT NOT NULL,
+                max_depth INT DEFAULT NULL,
+                learning_rate FLOAT DEFAULT NULL,
+                originalus_trukstamu_kiekis INT NOT NULL,
+                imputuotas_trukstamu_kiekis INT NOT NULL,
+                apdorotu_stulpeliu_kiekis INT NOT NULL,
+                modelio_metrikos JSON,
+                pozymiu_svarba JSON,
+                grafikai JSON,
+                test_predictions JSON,
+                sukurimo_data DATETIME DEFAULT CURRENT_TIMESTAMP,
+                busena ENUM('vykdomas', 'baigtas', 'klaida') DEFAULT 'vykdomas'
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        """)
+
+        # Add test_predictions column if it doesn't exist (for existing tables)
+        cursor.execute("""
+            SELECT COUNT(*) as count
+            FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+            AND TABLE_NAME = 'imputacijos_rezultatai'
+            AND COLUMN_NAME = 'test_predictions'
+        """)
+        result = cursor.fetchone()
+        if result[0] == 0:  # Use index instead of key since cursor is not dictionary type
             cursor.execute("""
-                CREATE TABLE IF NOT EXISTS imputacijos_rezultatai (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    rezultato_id VARCHAR(36) UNIQUE NOT NULL,
-                    originalus_failas VARCHAR(255) NOT NULL,
-                    imputuotas_failas VARCHAR(255) NOT NULL,
-                    modelio_tipas ENUM('random_forest', 'xgboost') NOT NULL,
-                    n_estimators INT NOT NULL,
-                    random_state INT NOT NULL,
-                    max_depth INT DEFAULT NULL,
-                    learning_rate FLOAT DEFAULT NULL,
-                    originalus_trukstamu_kiekis INT NOT NULL,
-                    imputuotas_trukstamu_kiekis INT NOT NULL,
-                    apdorotu_stulpeliu_kiekis INT NOT NULL,
-                    modelio_metrikos JSON,
-                    pozymiu_svarba JSON,
-                    grafikai JSON,
-                    test_predictions JSON,
-                    sukurimo_data DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    busena ENUM('vykdomas', 'baigtas', 'klaida') DEFAULT 'vykdomas'
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                ALTER TABLE imputacijos_rezultatai
+                ADD COLUMN test_predictions JSON AFTER grafikai
             """)
 
-            # Add test_predictions column if it doesn't exist (for existing tables)
+        # Create rezultatu_komentarai table (separate from general komentarai)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS rezultatu_komentarai (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                komentaro_id VARCHAR(36) UNIQUE NOT NULL,
+                rezultato_id VARCHAR(36) NOT NULL,
+                vardas VARCHAR(100) NOT NULL,
+                komentaras TEXT NOT NULL,
+                sukurimo_data DATETIME DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_rezultato_id (rezultato_id),
+                FOREIGN KEY (rezultato_id) REFERENCES imputacijos_rezultatai(rezultato_id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        """)
+
+        # Add max_depth and learning_rate columns if they don't exist (for existing tables)
+        try:
             cursor.execute("""
-                SELECT COUNT(*) as count
-                FROM information_schema.COLUMNS
-                WHERE TABLE_SCHEMA = DATABASE()
-                AND TABLE_NAME = 'imputacijos_rezultatai'
-                AND COLUMN_NAME = 'test_predictions'
+                ALTER TABLE imputacijos_rezultatai
+                ADD COLUMN max_depth INT DEFAULT NULL AFTER random_state
             """)
-            result = cursor.fetchone()
-            if result[0] == 0:  # Use index instead of key since cursor is not dictionary type
-                cursor.execute("""
-                    ALTER TABLE imputacijos_rezultatai
-                    ADD COLUMN test_predictions JSON AFTER grafikai
-                """)
+        except:
+            pass  # Column already exists
 
-            # Create rezultatu_komentarai table (separate from general komentarai)
+        try:
             cursor.execute("""
-                CREATE TABLE IF NOT EXISTS rezultatu_komentarai (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    komentaro_id VARCHAR(36) UNIQUE NOT NULL,
-                    rezultato_id VARCHAR(36) NOT NULL,
-                    vardas VARCHAR(100) NOT NULL,
-                    komentaras TEXT NOT NULL,
-                    sukurimo_data DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    INDEX idx_rezultato_id (rezultato_id),
-                    FOREIGN KEY (rezultato_id) REFERENCES imputacijos_rezultatai(rezultato_id) ON DELETE CASCADE
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                ALTER TABLE imputacijos_rezultatai
+                ADD COLUMN learning_rate FLOAT DEFAULT NULL AFTER max_depth
             """)
+        except:
+            pass  # Column already exists
 
-            # Add max_depth and learning_rate columns if they don't exist (for existing tables)
-            try:
-                cursor.execute("""
-                    ALTER TABLE imputacijos_rezultatai
-                    ADD COLUMN max_depth INT DEFAULT NULL AFTER random_state
-                """)
-            except:
-                pass  # Column already exists
-
-            try:
-                cursor.execute("""
-                    ALTER TABLE imputacijos_rezultatai
-                    ADD COLUMN learning_rate FLOAT DEFAULT NULL AFTER max_depth
-                """)
-            except:
-                pass  # Column already exists
-
-            print("[DB] Database tables initialized successfully")
-            # Context manager will automatically commit and close
+        connection.commit()
+        cursor.close()
+        db_manager.close_connection()
+        print("Database tables initialized successfully")
 
     except Error as e:
-        print(f"[DB] Error initializing database tables: {e}")
+        print(f"Error initializing database tables: {e}")
 
 # Initialize tables on startup
 init_database_tables()
@@ -624,84 +490,76 @@ def get_rezultatas(result_id):
     if not MYSQL_ENABLED:
         return jsonify({"error": "Rezultatų funkcija neprieinama - duomenų bazė nesukonfigūruota"}), 503
 
+    cursor = None
     try:
-        print(f"[API] Fetching result: {result_id}")
+        connection = db_manager.get_connection()
+        if not connection:
+            print(f"Failed to get database connection for result {result_id}")
+            return jsonify({"error": "Nepavyko prisijungti prie duomenų bazės"}), 500
 
-        with db_manager.connection() as db_conn:
-            if not db_conn.connection:
-                print(f"[API] Failed to get database connection for result {result_id}")
-                return jsonify({"error": "Nepavyko prisijungti prie duomenų bazės"}), 500
+        cursor = connection.cursor(dictionary=True)
 
-            cursor = db_conn.get_cursor(dictionary=True)
-
-            # Use longer timeout for large responses
+        # Use longer timeout for large responses
+        if connection:
             try:
                 cursor.execute("SET SESSION MAX_EXECUTION_TIME=60000")  # 60 seconds
             except:
                 pass  # Ignore if not supported
 
-            cursor.execute("""
-                SELECT * FROM imputacijos_rezultatai
-                WHERE rezultato_id = %s
-            """, (result_id,))
+        cursor.execute("""
+            SELECT * FROM imputacijos_rezultatai
+            WHERE rezultato_id = %s
+        """, (result_id,))
 
-            rezultatas = cursor.fetchone()
+        rezultatas = cursor.fetchone()
 
-            if not rezultatas:
-                print(f"[API] Result not found: {result_id}")
-                return jsonify({"error": "Rezultatas nerastas"}), 404
+        if not rezultatas:
+            print(f"Result not found: {result_id}")
+            return jsonify({"error": "Rezultatas nerastas"}), 404
 
-            print(f"[API] Result found, parsing JSON fields...")
+        # Parse JSON fields with error handling
+        try:
+            if rezultatas['modelio_metrikos']:
+                rezultatas['modelio_metrikos'] = json_module.loads(rezultatas['modelio_metrikos'])
+        except Exception as e:
+            print(f"Error parsing modelio_metrikos: {e}")
+            rezultatas['modelio_metrikos'] = None
 
-            # Parse JSON fields with error handling
-            try:
-                if rezultatas['modelio_metrikos']:
-                    rezultatas['modelio_metrikos'] = json_module.loads(rezultatas['modelio_metrikos'])
-                    print(f"[API] Parsed modelio_metrikos: {len(rezultatas['modelio_metrikos'])} columns")
-                else:
-                    print(f"[API] No modelio_metrikos data")
-            except Exception as e:
-                print(f"[API] Error parsing modelio_metrikos: {e}")
-                rezultatas['modelio_metrikos'] = None
+        try:
+            if rezultatas['pozymiu_svarba']:
+                rezultatas['pozymiu_svarba'] = json_module.loads(rezultatas['pozymiu_svarba'])
+        except Exception as e:
+            print(f"Error parsing pozymiu_svarba: {e}")
+            rezultatas['pozymiu_svarba'] = None
 
-            try:
-                if rezultatas['pozymiu_svarba']:
-                    rezultatas['pozymiu_svarba'] = json_module.loads(rezultatas['pozymiu_svarba'])
-                    print(f"[API] Parsed pozymiu_svarba: {len(rezultatas['pozymiu_svarba'])} columns")
-                else:
-                    print(f"[API] No pozymiu_svarba data")
-            except Exception as e:
-                print(f"[API] Error parsing pozymiu_svarba: {e}")
-                rezultatas['pozymiu_svarba'] = None
+        try:
+            if rezultatas['grafikai']:
+                rezultatas['grafikai'] = json_module.loads(rezultatas['grafikai'])
+        except Exception as e:
+            print(f"Error parsing grafikai: {e}")
+            rezultatas['grafikai'] = None
 
-            try:
-                if rezultatas['grafikai']:
-                    grafikai_data = json_module.loads(rezultatas['grafikai'])
-                    rezultatas['grafikai'] = grafikai_data
-                    print(f"[API] Parsed grafikai: {len(grafikai_data)} plots")
-                else:
-                    print(f"[API] No grafikai data")
-                    rezultatas['grafikai'] = {}
-            except Exception as e:
-                print(f"[API] Error parsing grafikai: {e}")
-                import traceback
-                traceback.print_exc()
-                rezultatas['grafikai'] = {}
-
-            print(f"[API] Returning result data")
-            return jsonify({"rezultatas": rezultatas})
+        return jsonify({"rezultatas": rezultatas})
 
     except Error as e:
-        print(f"[API] Database error in get_rezultatas: {str(e)}")
+        print(f"Database error in get_rezultatas: {str(e)}")
         import traceback
         traceback.print_exc()
         return jsonify({"error": f"Duomenų bazės klaida: {str(e)}"}), 500
 
     except Exception as e:
-        print(f"[API] Unexpected error in get_rezultatas: {str(e)}")
+        print(f"Unexpected error in get_rezultatas: {str(e)}")
         import traceback
         traceback.print_exc()
         return jsonify({"error": f"Serverio klaida: {str(e)}"}), 500
+
+    finally:
+        if cursor:
+            try:
+                cursor.close()
+            except:
+                pass
+        db_manager.close_connection()
 
 @app.route('/api/comments/<result_id>', methods=['GET'])
 def get_comments(result_id):
@@ -2138,101 +1996,46 @@ def get_csv_data(filename):
 def save_imputation_result(filename, imputed_filename, model_type, n_estimators, random_state,
                           original_missing, imputed_missing, plots, feature_importance, model_metrics,
                           max_depth=None, learning_rate=None, test_predictions=None):
-    """Save imputation result to database with retry logic and automatic connection cleanup"""
+    """Save imputation result to database"""
     if not MYSQL_ENABLED:
         return None
 
-    max_retries = 3
-    result_id = str(uuid.uuid4())
-
-    # Prepare JSON data BEFORE getting connection to minimize connection hold time
-    print("[DB] Preparing JSON data for database...")
-    plots_json = json_module.dumps(plots) if plots else None
-    metrics_json = json_module.dumps(model_metrics) if model_metrics else None
-    importance_json = json_module.dumps(feature_importance) if feature_importance else None
-    predictions_json = json_module.dumps(test_predictions) if test_predictions else None
-
-    # Log data sizes
-    total_size = 0
-    if plots_json:
-        size = len(plots_json) / 1024
-        print(f"  Plots JSON size: {size:.2f} KB")
-        total_size += size
-    if metrics_json:
-        size = len(metrics_json) / 1024
-        print(f"  Metrics JSON size: {size:.2f} KB")
-        total_size += size
-    if importance_json:
-        size = len(importance_json) / 1024
-        print(f"  Importance JSON size: {size:.2f} KB")
-        total_size += size
-    if predictions_json:
-        size = len(predictions_json) / 1024
-        print(f"  Predictions JSON size: {size:.2f} KB")
-        total_size += size
-
-    print(f"  Total JSON size: {total_size:.2f} KB ({total_size/1024:.2f} MB)")
-
-    for attempt in range(max_retries):
-        try:
-            print(f"[DB] Attempt {attempt + 1}/{max_retries} to save to database")
-            print(f"[DB] Pool status: {db_manager.get_pool_status()}")
-
-            # Use context manager to ensure connection is always released
-            with db_manager.connection() as db_conn:
-                if not db_conn.connection:
-                    print(f"[DB] Failed to get connection from pool")
-                    if attempt < max_retries - 1:
-                        import time
-                        time.sleep(2)
-                        continue
-                    return None
-
-                cursor = db_conn.get_cursor()
-
-                print(f"[DB] Inserting data into database...")
-                cursor.execute("""
-                    INSERT INTO imputacijos_rezultatai (
-                        rezultato_id, originalus_failas, imputuotas_failas,
-                        modelio_tipas, n_estimators, random_state, max_depth, learning_rate,
-                        originalus_trukstamu_kiekis, imputuotas_trukstamu_kiekis,
-                        apdorotu_stulpeliu_kiekis, modelio_metrikos,
-                        pozymiu_svarba, grafikai, test_predictions, busena
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                """, (
-                    result_id, filename, imputed_filename, model_type,
-                    n_estimators, random_state, max_depth, learning_rate,
-                    original_missing, imputed_missing,
-                    len(feature_importance) if feature_importance else 0,
-                    metrics_json, importance_json, plots_json, predictions_json,
-                    'baigtas'
-                ))
-
-                print(f"[DB] Data successfully saved with result_id: {result_id}")
-                # Context manager will automatically commit and close
-
-            return result_id
-
-        except Error as e:
-            print(f"[DB] Attempt {attempt + 1}/{max_retries} - MySQL Error: {e}")
-            import traceback
-            traceback.print_exc()
-
-            if attempt < max_retries - 1:
-                print(f"[DB] Retrying in 2 seconds...")
-                import time
-                time.sleep(2)
-            else:
-                print(f"[DB] All {max_retries} attempts failed")
-                return None
-
-        except Exception as e:
-            print(f"[DB] Unexpected error: {e}")
-            import traceback
-            traceback.print_exc()
+    try:
+        connection = db_manager.get_connection()
+        if not connection:
             return None
 
-    return None
+        result_id = str(uuid.uuid4())
+
+        cursor = connection.cursor()
+        cursor.execute("""
+            INSERT INTO imputacijos_rezultatai (
+                rezultato_id, originalus_failas, imputuotas_failas,
+                modelio_tipas, n_estimators, random_state, max_depth, learning_rate,
+                originalus_trukstamu_kiekis, imputuotas_trukstamu_kiekis,
+                apdorotu_stulpeliu_kiekis, modelio_metrikos,
+                pozymiu_svarba, grafikai, test_predictions, busena
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (
+            result_id, filename, imputed_filename, model_type,
+            n_estimators, random_state, max_depth, learning_rate,
+            original_missing, imputed_missing,
+            len(feature_importance) if feature_importance else 0,
+            json_module.dumps(model_metrics) if model_metrics else None,
+            json_module.dumps(feature_importance) if feature_importance else None,
+            json_module.dumps(plots) if plots else None,
+            json_module.dumps(test_predictions) if test_predictions else None,
+            'baigtas'
+        ))
+
+        connection.commit()
+        cursor.close()
+
+        return result_id
+
+    except Error as e:
+        print(f"Error saving imputation result: {e}")
+        return None
 
 @app.route('/impute/<filename>', methods=['POST'])
 def impute_missing_values(filename):

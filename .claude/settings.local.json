@@ -24,7 +24,13 @@
       "mcp__ide__executeCode",
       "Bash(del temp_cell.txt temp_cell_xgb.txt 2)",
       "Bash(del temp_cell.txt 2)",
-      "Bash(del \"C:\\Users\\Administratorius\\Desktop\\magistro_darbas\\add_kde_cell.py\")"
+      "Bash(del \"C:\\Users\\Administratorius\\Desktop\\magistro_darbas\\add_kde_cell.py\")",
+      "Bash(del \"C:\\Users\\Administratorius\\Desktop\\magistro_darbas\\update_cells.py\" \"C:\\Users\\Administratorius\\Desktop\\magistro_darbas\\update_cell61.py\" \"C:\\Users\\Administratorius\\Desktop\\magistro_darbas\\temp_cell.txt\")",
+      "Bash(del \"C:\\Users\\Administratorius\\Desktop\\magistro_darbas\\update_xgb_cells.py\" \"C:\\Users\\Administratorius\\Desktop\\magistro_darbas\\update_xgb_cells2.py\" \"C:\\Users\\Administratorius\\Desktop\\magistro_darbas\\update_comparison_cells.py\" \"C:\\Users\\Administratorius\\Desktop\\magistro_darbas\\temp_cell.txt\")",
+      "Bash(del \"C:\\Users\\Administratorius\\Desktop\\magistro_darbas\\modeliai\\__pycache__\\Random_Forest.cpython-313.pyc\")",
+      "Bash(del \"C:\\Users\\Administratorius\\Desktop\\magistro_darbas\\add_shrinkage_cells.py\")",
+      "Bash(del \"C:\\Users\\Administratorius\\Desktop\\magistro_darbas\\analyze_duplicates.py\")",
+      "Bash(del temp_old_app.py)"
     ],
     "deny": [],
     "ask": []

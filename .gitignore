@@ -28,3 +28,6 @@ uploads/*.csv
 
 #Magistro darbas
 Magistro_darbas.pdf
+
+#Additionally
+.claude/
