@@ -1,0 +1,38 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "Bash(python:*)",
+      "Bash(pip install:*)",
+      "Bash(timeout /t 5 python app.py)",
+      "Bash(dir:*)",
+      "Bash(pip show:*)",
+      "Bash(wmic memorychip:*)",
+      "Bash(timeout /t 5)",
+      "Bash(ping:*)",
+      "Bash(del \"c:\\Users\\Administratorius\\Desktop\\magistro_darbas\\templates\\duomenu_konvertavimas.html\")",
+      "Bash(tasklist:*)",
+      "Bash(findstr:*)",
+      "Bash(find:*)",
+      "Bash(del test_rich_text.py test_rich_text_output.xlsx 2)",
+      "Bash(nul)",
+      "Bash(del \"c:\\Users\\Administratorius\\Desktop\\magistro_darbas\\test_rich_text.py\")",
+      "Bash(timeout /t 5 python -c \"import os; os.remove(''c:/Users/Administratorius/Desktop/magistro_darbas/test_rich_text.py''); os.remove(''c:/Users/Administratorius/Desktop/magistro_darbas/test_rich_text_output.xlsx''); print(''Test files deleted'')\")",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(python3:*)",
+      "mcp__ide__executeCode",
+      "Bash(del temp_cell.txt temp_cell_xgb.txt 2)",
+      "Bash(del temp_cell.txt 2)",
+      "Bash(del \"C:\\Users\\Administratorius\\Desktop\\magistro_darbas\\add_kde_cell.py\")",
+      "Bash(del \"C:\\Users\\Administratorius\\Desktop\\magistro_darbas\\update_cells.py\" \"C:\\Users\\Administratorius\\Desktop\\magistro_darbas\\update_cell61.py\" \"C:\\Users\\Administratorius\\Desktop\\magistro_darbas\\temp_cell.txt\")",
+      "Bash(del \"C:\\Users\\Administratorius\\Desktop\\magistro_darbas\\update_xgb_cells.py\" \"C:\\Users\\Administratorius\\Desktop\\magistro_darbas\\update_xgb_cells2.py\" \"C:\\Users\\Administratorius\\Desktop\\magistro_darbas\\update_comparison_cells.py\" \"C:\\Users\\Administratorius\\Desktop\\magistro_darbas\\temp_cell.txt\")",
+      "Bash(del \"C:\\Users\\Administratorius\\Desktop\\magistro_darbas\\modeliai\\__pycache__\\Random_Forest.cpython-313.pyc\")",
+      "Bash(del \"C:\\Users\\Administratorius\\Desktop\\magistro_darbas\\add_shrinkage_cells.py\")",
+      "Bash(del \"C:\\Users\\Administratorius\\Desktop\\magistro_darbas\\analyze_duplicates.py\")",
+      "Bash(del temp_old_app.py)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
