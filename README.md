@@ -1,24 +1,47 @@
-# Random Forest trūkstamų reikšmių užpildymo WEB aplikacija
+# Ekonominių rodiklių trūkstamų reikšmių imputacijos WEB aplikacija
 
-Magistro darbo WEB aplikacija, skirta CSV duomenų failų analizei ir trūkstamų reikšmių užpildymui naudojant Random Forest algoritmą.
+Magistro darbo WEB aplikacija, skirta CSV duomenų failų analizei ir trūkstamų reikšmių užpildymui naudojant mašininio mokymosi algoritmus (Random Forest ir XGBoost).
 
 ## Funkcionalumas
 
-- **CSV failų įkėlimas**: Drag & drop arba failo naršymo funkcija
-- **Duomenų analizė**: Automatinis duomenų struktūros analizavimas
-- **Vizualizacijos**: 
-  - Trūkstamų reikšmių heatmap
-  - Koreliacijos matrica
-  - Feature importance grafikai
-- **Random Forest imputation**: Trūkstamų reikšmių užpildymas naudojant mašininio mokymosi algoritmą
-- **Rezultatų eksportas**: Galimybė atsisiųsti apdorotus duomenis
+### Duomenų įkėlimas ir analizė
+- **CSV/Excel failų įkėlimas**: Drag & drop arba failo naršymo funkcija
+- **Automatinė duomenų analizė**: Statistikų apskaičiavimas, trūkstamų reikšmių identifikavimas
+- **Little MCAR testas**: Statistinis testas trūkstamų duomenų mechanizmo nustatymui
+
+### Vizualizacijos
+- Trūkstamų reikšmių heatmap
+- Koreliacijos matrica
+- Feature importance grafikai
+- KDE (Kernel Density Estimation) pasiskirstymo grafikai
+- Originalių vs imputuotų reikšmių palyginimas
+
+### Imputacijos modeliai
+- **Random Forest**: Ensemble metodas su medžių balsavimu
+- **XGBoost**: Gradient boosting algoritmas su regularizacija
+
+### Modelių vertinimas
+- Sintetinis testavimas (train/test split)
+- SMAPE, RMSE, R² metrikos
+- Cross-validation
+- Hiperparametrų optimizavimas (RandomizedSearchCV)
+
+### Papildomos funkcijos
+- **Modelių palyginimas**: Random Forest vs XGBoost rezultatų analizė
+- **Rezultatų saugojimas**: MySQL duomenų bazėje
+- **PDF ataskaitų generavimas**: Detalios ataskaitos su grafikais
+- **El. pašto siuntimas**: Rezultatų išsiuntimas el. paštu
+- **Komentarų sistema**: Naudotojų atsiliepimai
 
 ## Sistemos reikalavimai
 
 - Python 3.8+
 - Flask web framework
-- Pandas, NumPy, Scikit-learn
+- Pandas, NumPy, SciPy, Scikit-learn
+- XGBoost
 - Matplotlib, Seaborn, Plotly
+- MySQL (pasirinktinai, komentarų sistemai)
+- ReportLab (PDF generavimui)
 
 ## Instaliavimas ir paleidimas
 
@@ -28,10 +51,39 @@ Magistro darbo WEB aplikacija, skirta CSV duomenų failų analizei ir trūkstam�
 pip install -r requirements.txt
 ```
 
-### 2. Aplikacijos paleidimas
+### 2. Aplinkos kintamųjų nustatymas (pasirinktinai)
 
+Sukurkite `.env` failą su šiais kintamaisiais:
+
+```env
+# MySQL konfigūracija (komentarų sistemai)
+MYSQL_HOST=your_host
+MYSQL_USER=your_user
+MYSQL_PASSWORD=your_password
+MYSQL_DATABASE=your_database
+
+# El. pašto konfigūracija
+SMTP_SERVER=smtp.example.com
+SMTP_PORT=587
+SMTP_USERNAME=your_email
+SMTP_PASSWORD=your_password
+SMTP_FROM_EMAIL=noreply@example.com
+SMTP_FROM_NAME=Duomenų Analizės Sistema
+
+# Aplikacijos saugumas
+SECRET_KEY=your-secret-key
+```
+
+### 3. Aplikacijos paleidimas
+
+**Lokali kūrimo aplinka:**
 ```bash
 python app.py
+```
+
+**Produkcijos aplinka (Gunicorn):**
+```bash
+gunicorn -c gunicorn_config.py app:app
 ```
 
 Aplikacija bus prieinama adresu: http://localhost:5000
@@ -39,54 +91,132 @@ Aplikacija bus prieinama adresu: http://localhost:5000
 ## Naudojimas
 
 1. **Atidarykite aplikaciją** naršyklėje (http://localhost:5000)
-2. **Įkelkite CSV failą** vilkdami į žymėtą sritį arba spausdami "browse"
-3. **Peržiūrėkite duomenų statistikas** - matysite eilučių/stulpelių skaičių ir trūkstamų reikšmių informaciją
-4. **Atlikite detalią analizę** - gaukite vizualizacijas ir koreliacijos matricą
-5. **Paleiskite trūkstamų reikšmių užpildymą** - konfigūruokite Random Forest parametrus
-6. **Atsisiųskite rezultatus** - gausite apdorotą CSV failą su užpildytomis reikšmėmis
+2. **Įkelkite CSV failą** su ekonominiais rodikliais
+3. **Peržiūrėkite duomenų statistikas** ir trūkstamų reikšmių informaciją
+4. **Pasirinkite imputacijos modelį** (Random Forest arba XGBoost)
+5. **Konfigūruokite modelio parametrus** (n_estimators, max_depth ir kt.)
+6. **Paleiskite imputaciją** ir peržiūrėkite rezultatus
+7. **Analizuokite metrikas** ir požymių svarbą
+8. **Atsisiųskite rezultatus** (CSV, Excel arba PDF formatu)
 
-## Algoritmo aprašymas
+## Algoritmų aprašymas
 
-Aplikacija naudoja **Random Forest** algoritmą trūkstamoms reikšmėms užpildyti:
+### Random Forest Imputer
+- Kiekvienam stulpeliui su trūkstamomis reikšmėmis treniruojamas atskiras RF modelis
+- Struktūriniai nuliai (0) naudojami kaip mokymo duomenys, bet neimputuojami
+- Kategoriniai prediktoriai ('geo', 'year') tik enkoduojami
+- Sintetinis testavimas be duomenų nutekėjimo (20% TEST)
 
-- **Regresiniai modeliai** - skaitinėms reikšmėms
-- **Klasifikavimo modeliai** - kategorinėms reikšmėms
-- **Feature importance analizė** - rodo, kurie kintamieji svarbiausi prognozėje
-- **Cross-validation** - užtikrina modelio stabilumą
+### XGBoost Imputer
+- Gradient boosting su XGBRegressor
+- Regularizacijos parametrai (reg_alpha, reg_lambda)
+- Ankstyvasis sustabdymas (early stopping)
+- Greita GPU parama (jei prieinama)
+
+### Vertinimo metrikos
+- **SMAPE** (Symmetric Mean Absolute Percentage Error) - veikia su 0 reikšmėmis
+- **RMSE** (Root Mean Squared Error)
+- **R²** (Determination Coefficient)
 
 ## Projekto struktūra
 
 ```
 magistro_darbas/
-├── app.py                 # Pagrindinis Flask aplikacijos failas
-├── requirements.txt       # Python priklausomybės
+├── app.py                     # Pagrindinis Flask aplikacijos failas
+├── requirements.txt           # Python priklausomybės
+├── gunicorn_config.py         # Gunicorn konfigūracija produkcijai
+├── render.yaml                # Render.com diegimo konfigūracija
+├── runtime.txt                # Python versija
+├── little_mcar_test.py        # Little MCAR testo implementacija
+├── modeliai/
+│   ├── __init__.py            # Modelių paketo inicializacija
+│   ├── Random_Forest.py       # Random Forest imputerio klasė
+│   └── XGBoost.py             # XGBoost imputerio klasė
+├── irankiai/
+│   ├── __init__.py
+│   └── siusti.py              # El. pašto siuntimo įrankiai
 ├── templates/
-│   └── index.html        # Frontend sąsaja
-├── uploads/              # Įkeltų failų direktorija (sukuriama automatiškai)
-└── README.md            # Projekto dokumentacija
+│   ├── base.html              # Bazinis šablonas
+│   ├── index.html             # Pagrindinis puslapis
+│   ├── imputacija.html        # Imputacijos puslapis
+│   ├── ikelti_duomenys.html   # Duomenų įkėlimo puslapis
+│   ├── rezultatai.html        # Rezultatų sąrašas
+│   ├── rezultatas_detali.html # Detalūs rezultatai
+│   ├── palyginimas.html       # Modelių palyginimas
+│   ├── komentarai.html        # Komentarų puslapis
+│   └── apie.html              # Informacija apie sistemą
+├── static/                    # CSS, paveiksliukai
+├── staticjs/                  # JavaScript failai
+├── uploads/                   # Įkeltų failų direktorija
+└── README.md                  # Projekto dokumentacija
 ```
 
 ## API endpoint'ai
 
+### Puslapiai
 - `GET /` - Pagrindinis puslapis
+- `GET /imputacija` - Imputacijos sąsaja
+- `GET /ikelti-duomenys` - Duomenų įkėlimas
+- `GET /rezultatai` - Rezultatų sąrašas
+- `GET /rezultatai/<result_id>` - Konkretūs rezultatai
+- `GET /palyginimas` - Modelių palyginimas
+- `GET /komentarai` - Komentarai
+- `GET /apie` - Apie sistemą
+
+### API
 - `POST /upload` - CSV failo įkėlimas
-- `GET /analyze/<filename>` - Duomenų analizės rezultatai
+- `GET /analyze/<filename>` - Duomenų analizė
 - `POST /impute/<filename>` - Trūkstamų reikšmių užpildymas
-- `GET /download/<filename>` - Apdoroto failo atsisiuntimas
+- `GET /download/<filename>` - Failo atsisiuntimas
+- `POST /api/palyginimas` - Modelių palyginimas
+- `GET /api/rezultatai` - Rezultatų sąrašas (JSON)
+- `GET /api/rezultatai/<result_id>` - Rezultato detalės (JSON)
+- `GET /api/rezultatai/<result_id>/kde/<indicator>` - KDE grafikas
+- `GET /api/rezultatai/<result_id>/koreliacijos-analize` - Koreliacijos analizė
+- `POST /api/send-result-email` - Rezultatų siuntimas el. paštu
+- `GET /api/comments/<result_id>` - Rezultato komentarai
+- `POST /api/comments` - Naujas komentaras
+- `GET /api/system-status` - Sistemos būsena
 
-## Parametrų konfigūravimas
+## Modelių parametrai
 
-**Random Forest parametrai:**
-- `n_estimators` - medžių skaičius (numatyta: 100)
-- `random_state` - atsitiktinumo kontrolė reprodukcijos tikslais (numatyta: 42)
+### Random Forest
+| Parametras | Aprašymas | Numatyta reikšmė |
+|------------|-----------|------------------|
+| n_estimators | Medžių skaičius | 100 |
+| max_depth | Maksimalus medžio gylis | 15 |
+| min_samples_split | Minimalus pavyzdžių skaičius padalinimui | 5 |
+| min_samples_leaf | Minimalus pavyzdžių skaičius lape | 2 |
+| random_state | Atsitiktinumo sėkla | 42 |
 
-## Palaikomos duomenų struktūros
+### XGBoost
+| Parametras | Aprašymas | Numatyta reikšmė |
+|------------|-----------|------------------|
+| n_estimators | Boostingo iteracijų skaičius | 200 |
+| learning_rate | Mokymosi greitis | 0.1 |
+| max_depth | Maksimalus medžio gylis | 6 |
+| reg_alpha | L1 regularizacija | 0 |
+| reg_lambda | L2 regularizacija | 1 |
+| random_state | Atsitiktinumo sėkla | 42 |
+
+## Palaikomi duomenų formatai
 
 - CSV failai su skaitinėmis ir kategorinėmis reikšmėmis
+- Excel failai (.xlsx, .xls)
 - Automatinis duomenų tipų atpažinimas
 - Maksimalus failo dydis: 16MB
+- Palaikomi kategoriniai stulpeliai: 'geo', 'year' (automatiškai atpažįstami)
+
+## Diegimas į Render.com
+
+Projektas sukonfigūruotas diegimui į Render.com platformą:
+
+1. Sukurkite naują Web Service Render.com
+2. Prijunkite GitHub repozitoriją
+3. Nustatykite aplinkos kintamuosius
+4. Diegimas vyks automatiškai pagal `render.yaml` konfigūraciją
 
 ## Autorius
 
 Magistro darbo autorius
-Vilniaus universitetas
+Vilniaus universitetas, 2025
