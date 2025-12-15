@@ -1,6 +1,8 @@
-# Ekonominių rodiklių trūkstamų reikšmių imputacijos WEB aplikacija
+# Mašininio mokymosi modelių taikymas prognozuojant regionų ekonominius rodiklius NUTS 2 lygmeniu
 
-Magistro darbo WEB aplikacija, skirta CSV duomenų failų analizei ir trūkstamų reikšmių užpildymui naudojant mašininio mokymosi algoritmus (Random Forest ir XGBoost).
+**Pagrindinis magistro darbo tyrimo failas:** `Tyrimas_Ekonominiu_Rodikliu_Imputacija.ipynb` — Jupyter Notebook su visa tyrimo metodologija, eksperimentais ir rezultatų analize.
+
+**Flask WEB aplikacija** veikia kaip ekspertinė sistema ir duomenų vizualizacijos įrankis, leidžiantis interaktyviai tyrinėti imputuotus duomenis, generuoti dinamines vizualizacijas bei atlikti trūkstamų reikšmių užpildymą naudojant mašininio mokymosi algoritmus (Random Forest ir XGBoost).
 
 ## Funkcionalumas
 
