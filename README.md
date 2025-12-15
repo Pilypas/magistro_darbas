@@ -222,5 +222,5 @@ Projektas sukonfigūruotas diegimui į Render.com platformą:
 
 ## Autorius
 
-Magistro darbo autorius: Irmantas Pilypas ITVM24.
+Magistro darbo autorius: Irmantas Pilypas ITVM24.<br>
 Vilniaus universitetas, Šiaulių akademija 2025
