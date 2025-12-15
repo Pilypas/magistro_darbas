@@ -1,22 +1,22 @@
 # Mašininio mokymosi modelių taikymas prognozuojant regionų ekonominius rodiklius NUTS 2 lygmeniu
 
-**Pagrindinis magistro darbo tyrimo failas:** `Tyrimas_Ekonominiu_Rodikliu_Imputacija.ipynb` — Jupyter Notebook su visa tyrimo metodologija, eksperimentais ir rezultatų analize.
+**Pagrindinis magistro darbo tyrimo failas:** `Tyrimas_Ekonominiu_Rodikliu_Imputacija.ipynb` - Jupyter Notebook su visa tyrimo metodologija, eksperimentais ir rezultatų analize.
 
 **Flask WEB aplikacija** veikia kaip ekspertinė sistema ir duomenų vizualizacijos įrankis, leidžiantis interaktyviai tyrinėti imputuotus duomenis, generuoti dinamines vizualizacijas bei atlikti trūkstamų reikšmių užpildymą naudojant mašininio mokymosi algoritmus (Random Forest ir XGBoost).
 
-## Funkcionalumas
+## Flask WEB aplikacijos pagrindinės funkcijos
 
 ### Duomenų įkėlimas ir analizė
 - **CSV/Excel failų įkėlimas**: Drag & drop arba failo naršymo funkcija
-- **Automatinė duomenų analizė**: Statistikų apskaičiavimas, trūkstamų reikšmių identifikavimas
-- **Little MCAR testas**: Statistinis testas trūkstamų duomenų mechanizmo nustatymui
+- **Automatinė duomenų analizė**: Statistikų apskaičiavimas duomenims, trūkstamų reikšmių identifikavimas
+- **Little MCAR testas**: Statistinis testas trūkstamų duomenų mechanizmo nustatymui (Jupyter Notebook faile)
 
 ### Vizualizacijos
 - Trūkstamų reikšmių heatmap
 - Koreliacijos matrica
 - Feature importance grafikai
 - KDE (Kernel Density Estimation) pasiskirstymo grafikai
-- Originalių vs imputuotų reikšmių palyginimas
+- Originalių ir imputuotų reikšmių palyginimas
 
 ### Imputacijos modeliai
 - **Random Forest**: Ensemble metodas su medžių balsavimu
@@ -24,12 +24,12 @@
 
 ### Modelių vertinimas
 - Sintetinis testavimas (train/test split)
-- SMAPE, RMSE, R² metrikos
+- sMAPE, nRMSE, nMAE ir R² metrikos
 - Cross-validation
 - Hiperparametrų optimizavimas (RandomizedSearchCV)
 
 ### Papildomos funkcijos
-- **Modelių palyginimas**: Random Forest vs XGBoost rezultatų analizė
+- **Modelių palyginimas**: Random Forest ir XGBoost rezultatų palyginimo analizė
 - **Rezultatų saugojimas**: MySQL duomenų bazėje
 - **PDF ataskaitų generavimas**: Detalios ataskaitos su grafikais
 - **El. pašto siuntimas**: Rezultatų išsiuntimas el. paštu
@@ -40,9 +40,10 @@
 - Python 3.8+
 - Flask web framework
 - Pandas, NumPy, SciPy, Scikit-learn
-- XGBoost
+- XGBoost (1.7.6)
+- scikit-learn
 - Matplotlib, Seaborn, Plotly
-- MySQL (pasirinktinai, komentarų sistemai)
+- MySQL (komentarams, rezultatų išsaugojimui)
 - ReportLab (PDF generavimui)
 
 ## Instaliavimas ir paleidimas
@@ -58,7 +59,7 @@ pip install -r requirements.txt
 Sukurkite `.env` failą su šiais kintamaisiais:
 
 ```env
-# MySQL konfigūracija (komentarų sistemai)
+# MySQL konfigūracija (komentarams, rezultatų išsaugojimui)
 MYSQL_HOST=your_host
 MYSQL_USER=your_user
 MYSQL_PASSWORD=your_password
@@ -72,21 +73,21 @@ SMTP_PASSWORD=your_password
 SMTP_FROM_EMAIL=noreply@example.com
 SMTP_FROM_NAME=Duomenų Analizės Sistema
 
-# Aplikacijos saugumas
-SECRET_KEY=your-secret-key
+
+
 ```
 
 ### 3. Aplikacijos paleidimas
 
-**Lokali kūrimo aplinka:**
+**Flask aplikacijos paleidimas lokalioje komapiuterio aplinkoje:**
 ```bash
 python app.py
 ```
 
-**Produkcijos aplinka (Gunicorn):**
-```bash
-gunicorn -c gunicorn_config.py app:app
-```
+
+
+
+
 
 Aplikacija bus prieinama adresu: http://localhost:5000
 
@@ -107,17 +108,18 @@ Aplikacija bus prieinama adresu: http://localhost:5000
 - Kiekvienam stulpeliui su trūkstamomis reikšmėmis treniruojamas atskiras RF modelis
 - Struktūriniai nuliai (0) naudojami kaip mokymo duomenys, bet neimputuojami
 - Kategoriniai prediktoriai ('geo', 'year') tik enkoduojami
-- Sintetinis testavimas be duomenų nutekėjimo (20% TEST)
+- Sintetinis testavimas be duomenų nutekėjimo (20 % TEST)
 
 ### XGBoost Imputer
 - Gradient boosting su XGBRegressor
 - Regularizacijos parametrai (reg_alpha, reg_lambda)
 - Ankstyvasis sustabdymas (early stopping)
-- Greita GPU parama (jei prieinama)
+
 
 ### Vertinimo metrikos
-- **SMAPE** (Symmetric Mean Absolute Percentage Error) - veikia su 0 reikšmėmis
-- **RMSE** (Root Mean Squared Error)
+- **SMAPE** (Symmetric Mean Absolute Percentage Error)
+- **nRMSE** (Normalized Root Mean Squared Error)
+- **nMAE** (Normalized Mean Absolute Error)
 - **R²** (Determination Coefficient)
 
 ## Projekto struktūra
@@ -132,8 +134,8 @@ magistro_darbas/
 ├── little_mcar_test.py        # Little MCAR testo implementacija
 ├── modeliai/
 │   ├── __init__.py            # Modelių paketo inicializacija
-│   ├── Random_Forest.py       # Random Forest imputerio klasė
-│   └── XGBoost.py             # XGBoost imputerio klasė
+│   ├── Random_Forest.py       # Random Forest imputer'io klasė
+│   └── XGBoost.py             # XGBoost imputer'io klasė
 ├── irankiai/
 │   ├── __init__.py
 │   └── siusti.py              # El. pašto siuntimo įrankiai
@@ -149,7 +151,7 @@ magistro_darbas/
 │   └── apie.html              # Informacija apie sistemą
 ├── static/                    # CSS, paveiksliukai
 ├── staticjs/                  # JavaScript failai
-├── uploads/                   # Įkeltų failų direktorija
+├── uploads/                   # Įkeltų failų (t.y NUTS 2 regionų duomenų) direktorija
 └── README.md                  # Projekto dokumentacija
 ```
 
@@ -194,7 +196,7 @@ magistro_darbas/
 ### XGBoost
 | Parametras | Aprašymas | Numatyta reikšmė |
 |------------|-----------|------------------|
-| n_estimators | Boostingo iteracijų skaičius | 200 |
+| n_estimators | Boosting'o iteracijų skaičius | 200 |
 | learning_rate | Mokymosi greitis | 0.1 |
 | max_depth | Maksimalus medžio gylis | 6 |
 | reg_alpha | L1 regularizacija | 0 |
@@ -207,18 +209,18 @@ magistro_darbas/
 - Excel failai (.xlsx, .xls)
 - Automatinis duomenų tipų atpažinimas
 - Maksimalus failo dydis: 16MB
-- Palaikomi kategoriniai stulpeliai: 'geo', 'year' (automatiškai atpažįstami)
+- Palaikomi kategoriniai stulpeliai: 'geo', 'year'
 
 ## Diegimas į Render.com
 
 Projektas sukonfigūruotas diegimui į Render.com platformą:
 
-1. Sukurkite naują Web Service Render.com
-2. Prijunkite GitHub repozitoriją
-3. Nustatykite aplinkos kintamuosius
-4. Diegimas vyks automatiškai pagal `render.yaml` konfigūraciją
+1. Reikia sukurti naują Web Service Render.com
+2. Prijungti GitHub repozitoriją
+3. Nustatyti aplinkos kintamuosius
+4. Ir diegimas vyks automatiškai pagal `render.yaml` konfigūraciją
 
 ## Autorius
 
-Magistro darbo autorius
-Vilniaus universitetas, 2025
+Magistro darbo autorius: Irmantas Pilypas ITVM24.
+Vilniaus universitetas, Šiaulių akademija 2025

@@ -1079,8 +1079,8 @@ def send_result_email():
                     </div>
                 </div>
                 <div class="footer">
-                    <p>Šis el. laiškas buvo sugeneruotas automatiškai.</p>
-                    <p>© {datetime.now().year} Duomenų Analizės Sistema</p>
+                    <p>Sistemos autorius: Irmantas Pilypas</p>
+                    <p>© {datetime.now().year} Mašininio mokymosi modelių taikymas prognozuojant regionų ekonominius rodiklius NUTS 2 lygmeniu</p>
                 </div>
             </div>
         </body>
@@ -1679,7 +1679,7 @@ def get_rezultato_kde(result_id, indicator_name):
                     "mean_difference": round(abs(imputed_mean - original_mean), 4),
                     "original_std": round(original_std, 4),
                     "imputed_std": round(imputed_std, 4),
-                    "test_set_percentage": 30  # Typically 20% for test set
+                    "test_set_percentage": 20  # Typically 20% for test set
                 }
             })
 
