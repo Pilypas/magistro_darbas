@@ -1,16 +1,48 @@
 """
-XGBoost modelio implementacija ekonominių rodiklių trūkstamų reikšmių užpildymui
 ================================================================================
+XGBOOST IMPUTAVIMO MODELIS
+================================================================================
+Ekonominių rodiklių trūkstamų reikšmių užpildymas naudojant XGBoost algoritmą.
 
-PAGRINDINĖS TAISYKLĖS
----------------------
-• Struktūriniai nuliai (0) NIEKADA NEIMPUTUOJAMI – imputuojamos tik NaN reikšmės
-• 0 reikšmės naudojamos kaip TRAIN duomenys (reali informacija), bet NE kaip TEST
-• Kategoriniai prediktoriai ('geo', 'year') BE trūkumų - tik enkoduojami
-• Synthetic test be leakage (20% TEST be 0 reikšmių)
-• Prediktorių imputacija (mean) ignoruoja 0 reikšmes
-• Naudojama SMAPE metrika (veikia su 0 reikšmėmis)
+NAUDOJIMAS:
+-----------
+- Flask aplikacija: fit_and_impute(), get_model_metrics(), get_feature_importance()
+- Jupyter Notebook: visi metodai + print_*() funkcijos analizei ir vizualizacijai
+
+PAGRINDINĖS TAISYKLĖS:
+----------------------
+1. Struktūriniai nuliai (0) NIEKADA NEIMPUTUOJAMI - imputuojamos tik NaN reikšmės
+2. 0 reikšmės naudojamos kaip TRAIN duomenys (reali informacija), bet NE kaip TEST
+3. Kategoriniai prediktoriai ('geo', 'year') BE trūkumų - tik enkoduojami
+4. Synthetic test be leakage (20% TEST be 0 reikšmių)
+5. Prediktorių imputacija (mean) ignoruoja 0 reikšmes
+6. Naudojama SMAPE metrika (veikia su 0 reikšmėmis)
+
+KODO STRUKTŪRA:
+---------------
+1. IMPORTAI IR PRIKLAUSOMYBĖS
+2. PAGALBINĖ KLASĖ: ZeroIgnoringImputer
+3. PAGRINDINĖ KLASĖ: XGBoostImputer
+   3.1. Inicializacija (__init__)
+   3.2. PUBLIC API (Flask + Jupyter Notebook)
+   3.3. Duomenų paruošimas
+   3.4. Geo statistikų skaičiavimas (Feature Engineering)
+   3.5. Stulpelio imputavimas
+   3.6. Train/Test padalijimas
+   3.7. Modelio treniravimas
+   3.8. Feature transformacijos
+   3.9. Galutinė imputacija su post-processing
+   3.10. Metrikų skaičiavimas ir saugojimas
+
+Autorius: Magistro darbas
+Versija: 2.0 (Clean Code)
+================================================================================
 """
+
+# ==============================================================================
+# 1. IMPORTAI IR PRIKLAUSOMYBĖS
+# ==============================================================================
+# Šie importai naudojami tiek Flask aplikacijoje, tiek Jupyter Notebook'e
 
 import numpy as np
 import pandas as pd
@@ -20,6 +52,7 @@ from sklearn.metrics import mean_squared_error, r2_score
 from sklearn.model_selection import KFold, RandomizedSearchCV
 from scipy.stats import randint, uniform
 
+# XGBoost biblioteka
 try:
     import xgboost as xgb
 except ImportError as e:
@@ -28,16 +61,31 @@ except ImportError as e:
     ) from e
 
 
+# ==============================================================================
+# 2. PAGALBINĖ KLASĖ: ZeroIgnoringImputer
+# ==============================================================================
+# Naudojama: vidiniams skaičiavimams (prediktorių NaN užpildymui)
+# Paskirtis: Apskaičiuoja vidurkį ignoruojant 0 ir NaN reikšmes
+
 class ZeroIgnoringImputer:
     """
-    Custom imputer ignoruojantis 0 reikšmes skaičiuojant mean.
+    Custom imputer, kuris ignoruoja 0 reikšmes skaičiuojant mean.
 
     Struktūriniai 0 neturėtų įtakoti prediktorių imputacijos,
     nes jie dažnai reiškia "nėra duomenų" arba "neaktualu".
+
+    Metodai:
+        fit(X): Apskaičiuoja mean ignoruojant NaN ir 0
+        transform(X): Užpildo NaN su apskaičiuotais mean
+        fit_transform(X): Fit ir transform vienu žingsniu
     """
 
     def __init__(self):
         self.statistics_ = None
+
+    # -------------------------------------------------------------------------
+    # 2.1. Pagrindiniai metodai
+    # -------------------------------------------------------------------------
 
     def fit(self, X):
         """Apskaičiuoja mean ignoruojant NaN ir 0 reikšmes."""
@@ -53,6 +101,10 @@ class ZeroIgnoringImputer:
     def fit_transform(self, X):
         """Fit ir transform vienu žingsniu."""
         return self.fit(X).transform(X)
+
+    # -------------------------------------------------------------------------
+    # 2.2. Vidiniai pagalbiniai metodai
+    # -------------------------------------------------------------------------
 
     @staticmethod
     def _to_array(X):
@@ -84,6 +136,12 @@ class ZeroIgnoringImputer:
         return X_array
 
 
+# ==============================================================================
+# 3. PAGRINDINĖ KLASĖ: XGBoostImputer
+# ==============================================================================
+# Naudojama: Flask aplikacijoje ir Jupyter Notebook'e
+# Paskirtis: Trūkstamų ekonominių rodiklių reikšmių užpildymas
+
 class XGBoostImputer:
     """
     XGBoost imputavimas ekonominiams rodikliams.
@@ -91,7 +149,23 @@ class XGBoostImputer:
     Kiekvienam stulpeliui su trūkstamomis reikšmėmis treniruojamas atskiras XGBRegressor.
     Synthetic test: 20% indeksų -> TEST (tik iš eilučių, kur target != 0).
     Po vertinimo pertreniruojama ant 100% žinomų taikinių.
+
+    Naudojimas Flask aplikacijoje:
+        imputer = XGBoostImputer()
+        df_imputed = imputer.fit_and_impute(df)
+        metrics = imputer.get_model_metrics()
+
+    Naudojimas Jupyter Notebook'e:
+        imputer = XGBoostImputer(cv_folds=5)
+        df_imputed = imputer.fit_and_impute(df)
+        imputer.print_cv_results()  # Išsami analizė
     """
+
+    # ==========================================================================
+    # 3.1. INICIALIZACIJA
+    # ==========================================================================
+    # Naudojama: Flask + Jupyter Notebook
+    # Paskirtis: Nustatyti modelio hiperparametrus ir inicializuoti kintamuosius
 
     def __init__(
         self,
@@ -113,6 +187,29 @@ class XGBoostImputer:
         use_post_processing=True,
         shrinkage_k=3.0
     ):
+        """
+        Inicializuoja XGBoost imputerį.
+
+        Args:
+            n_estimators: Iteracijų (medžių) skaičius
+            random_state: Atsitiktinių skaičių generatoriaus seed
+            learning_rate: Mokymosi greitis (eta)
+            max_depth: Maksimalus medžio gylis
+            subsample: Eilučių atrankos proporcija kiekvienai iteracijai
+            colsample_bytree: Stulpelių atrankos proporcija kiekvienam medžiui
+            min_child_weight: Minimalus lapo svoris
+            reg_alpha: L1 regularizacija (Lasso)
+            reg_lambda: L2 regularizacija (Ridge)
+            categorical_cols: Kategorinių stulpelių sąrašas
+            exclude_columns: Stulpeliai, kurie nebus imputuojami
+            cv_folds: Kryžminės validacijos fold'ų skaičius
+            use_hyperopt: Ar naudoti hiperparametrų optimizavimą
+            hyperopt_n_iter: Hiperparametrų paieškos iteracijų skaičius
+            hyperopt_cv: CV folds hiperparametrų paieškai
+            use_post_processing: Ar naudoti post-processing (Empirical Bayes)
+            shrinkage_k: Shrinkage slenkstis standartiniais nuokrypiais
+        """
+        # ----- Baziniai XGBoost parametrai -----
         self.n_estimators = n_estimators
         self.random_state = random_state
         self.learning_rate = learning_rate
@@ -122,39 +219,53 @@ class XGBoostImputer:
         self.min_child_weight = min_child_weight
         self.reg_alpha = reg_alpha
         self.reg_lambda = reg_lambda
+
+        # ----- Duomenų konfigūracija -----
         self.categorical_cols = categorical_cols or ['geo', 'year']
         self.exclude_columns = exclude_columns or []
+
+        # ----- Kryžminės validacijos parametrai -----
         self.cv_folds = cv_folds
 
-        # Hiperparametru optimizavimo nustatymai
+        # ----- Hiperparametrų optimizavimo nustatymai -----
         self.use_hyperopt = use_hyperopt
         self.hyperopt_n_iter = hyperopt_n_iter
         self.hyperopt_cv = hyperopt_cv
 
-        # Hibridinis post-processing: Empirical Bayes Shrinkage + kietosios ribos
+        # ----- Post-processing parametrai (Empirical Bayes Shrinkage) -----
         self.use_post_processing = use_post_processing
-        self.shrinkage_k = shrinkage_k  # Standartinių nuokrypių skaičius shrinkage pradžiai
+        self.shrinkage_k = shrinkage_k
 
-        self.models = {}
-        self.feature_importance = {}
-        self.model_metrics = {}
-        self.test_predictions = {}
-        self.cv_scores = {}
-        self.best_params = {}  # Saugomi geriausi parametrai kiekvienam rodikliui
-        self.geo_stats = {}  # Regiono statistikos kiekvienam rodikliui
-        self.shrinkage_applied = {}  # Informacija apie pritaikytą shrinkage
+        # ----- Rezultatų saugyklos -----
+        self.models = {}                # Ištreniruoti modeliai kiekvienam stulpeliui
+        self.feature_importance = {}    # Feature svarbumo koeficientai
+        self.model_metrics = {}         # Test set metrikos (R², nRMSE, nMAE, sMAPE)
+        self.test_predictions = {}      # Test predikcijos (Excel failų generavimui)
+        self.cv_scores = {}             # Kryžminės validacijos rezultatai
+        self.best_params = {}           # Geriausi hiperparametrai (jei hyperopt įjungtas)
+        self.geo_stats = {}             # Regiono statistikos kiekvienam rodikliui
+        self.shrinkage_applied = {}     # Post-processing informacija
 
-    # ============================================================================
-    # PUBLIC API
-    # ============================================================================
+    # ==========================================================================
+    # 3.2. PUBLIC API - FLASK APLIKACIJA
+    # ==========================================================================
+    # Šie metodai naudojami Flask aplikacijoje imputavimui ir rezultatų gavimui
 
     def fit_and_impute(self, df: pd.DataFrame) -> pd.DataFrame:
         """
-        Treniruoja modelius ir imputuoja trūkstamas reikšmes.
+        Pagrindinis metodas: treniruoja modelius ir imputuoja trūkstamas reikšmes.
+
+        NAUDOJAMA: Flask aplikacija + Jupyter Notebook
 
         SVARBU: Naudojame ORIGINALIAS reikšmes kaip features, ne jau imputuotas.
         Tai išvengia "cascade error" problemos, kai vieno stulpelio klaidos
         persiduoda į kitus stulpelius.
+
+        Procesas:
+            1. Paruošia DataFrame (kopijuoja, konvertuoja tipus)
+            2. Validuoja kategorinius stulpelius
+            3. Išsaugo originalias reikšmes features naudojimui
+            4. Imputuoja kiekvieną stulpelį su NaN reikšmėmis
 
         Args:
             df: DataFrame su trūkstamomis reikšmėmis
@@ -162,44 +273,81 @@ class XGBoostImputer:
         Returns:
             DataFrame su imputuotomis reikšmėmis (tik NaN, ne 0)
         """
+        # Žingsnis 1: Paruošiame DataFrame
         df_work = self._prepare_dataframe(df)
+
+        # Žingsnis 2: Validuojame kategorinius stulpelius
         self._validate_categorical_columns(df_work)
 
-        # SVARBU: Išsaugome originalias reikšmes features naudojimui
+        # Žingsnis 3: Išsaugome originalias reikšmes features naudojimui
         # Tai užtikrina, kad kiekvienas stulpelis imputuojamas naudojant
         # TIK originalias reikšmes, o ne jau imputuotas iš kitų stulpelių
         self._df_original = df_work.copy()
 
-        # Imputuojame kiekvieną stulpelį su NaN reikšmėmis
+        # Žingsnis 4: Imputuojame kiekvieną stulpelį su NaN reikšmėmis
         for target_col in df_work.columns:
             if self._should_impute_column(df_work, target_col):
                 self._impute_column(df_work, target_col)
 
-        # Atlaisviname atmintį
+        # Žingsnis 5: Atlaisviname atmintį
         del self._df_original
 
         return df_work
 
     def get_feature_importance(self):
-        """Grąžina feature importance kiekvienam stulpeliui."""
+        """
+        Grąžina feature importance kiekvienam stulpeliui.
+
+        NAUDOJAMA: Flask aplikacija + Jupyter Notebook
+
+        Returns:
+            dict: {stulpelio_pavadinimas: {feature: importance_value}}
+        """
         return self.feature_importance
 
     def get_model_metrics(self):
-        """Grąžina modelių metrikos."""
+        """
+        Grąžina modelių metrikos (R², nRMSE, nMAE, sMAPE).
+
+        NAUDOJAMA: Flask aplikacija + Jupyter Notebook
+
+        Returns:
+            dict: {stulpelio_pavadinimas: {nrmse, r2, nmae, smape, ...}}
+        """
         return self.model_metrics
 
     def get_test_predictions(self, df=None):
-        """Grąžina test predikcijas."""
+        """
+        Grąžina test predikcijas (naudojama Excel failų generavimui).
+
+        NAUDOJAMA: Flask aplikacija + Jupyter Notebook
+
+        Returns:
+            dict: {stulpelio_pavadinimas: {y_true, y_pred, test_indices, ...}}
+        """
         return self.test_predictions
 
     def get_cv_scores(self):
-        """Grąžina cross-validation rezultatus."""
+        """
+        Grąžina cross-validation rezultatus.
+
+        NAUDOJAMA: Flask aplikacija + Jupyter Notebook
+
+        Returns:
+            dict: CV rezultatai su vidurkiais ir standartinėmis paklaidomis
+        """
         return self.cv_scores
+
+    # ==========================================================================
+    # 3.2. PUBLIC API - JUPYTER NOTEBOOK (PAPILDOMI METODAI)
+    # ==========================================================================
+    # Šie metodai skirti išsamiai analizei ir vizualizacijai Jupyter Notebook'e
 
     def get_params(self):
         """
         Grąžina modelio hiperparametrus kaip žodyną.
-        Naudojama notebook'e parametrų spausdinimui.
+
+        NAUDOJAMA: Jupyter Notebook (parametrų spausdinimui)
 
         Returns:
             dict: Visi XGBoost modelio parametrai
@@ -228,6 +376,8 @@ class XGBoostImputer:
         """
         Grąžina geriausius parametrus kiekvienam rodikliui po hiperparametrų optimizavimo.
 
+        NAUDOJAMA: Jupyter Notebook
+
         Returns:
             dict: Geriausi parametrai pagal rodiklius
         """
@@ -236,6 +386,8 @@ class XGBoostImputer:
     def get_best_params_summary(self):
         """
         Grąžina suvestinę apie dažniausiai pasirinktas hiperparametrų reikšmes.
+
+        NAUDOJAMA: Jupyter Notebook
 
         Returns:
             dict: Statistika apie geriausius parametrus
@@ -273,8 +425,9 @@ class XGBoostImputer:
 
     def print_params(self):
         """
-        Išspausdina modelio parametrus.
-        Naudojama notebook'e.
+        Išspausdina modelio parametrus į konsolę.
+
+        NAUDOJAMA: Jupyter Notebook
         """
         params = self.get_params()
         print("XGBoost parametrai:")
@@ -293,16 +446,18 @@ class XGBoostImputer:
             print("     - max_shrinkage: 5-10% (islaiko 90-95% XGB info)")
             print("     - sigmoid_steepness = 0.4 (labai svelnus perejimas)")
             print("     - Papildomas ribojimas: shrinkage max 10% bet kokiu atveju")
-            print("  2. YEAR-BASED VARIATION (unikalios reiksmes kiekvienam metui)")
+            print("  2. YEAR-BASED VARIATION")
             print("     - Bazinis jitter: 8-15% nuo geo_std")
             print("     - Year offset: 2% nuo std per metus (sisteminis)")
             print("     - Deterministinis seed: geo + year + target_col")
-            print("  3. Kietosios ribos (safety net)")
+            print("  3. Ribos (safety net)")
             print("     - [min*0.3, max*2.0] arba [year_specific_mean +/- 4*std]")
 
     def print_best_params(self):
         """
         Išspausdina geriausius rastus parametrus po hiperparametrų optimizavimo.
+
+        NAUDOJAMA: Jupyter Notebook
         """
         if not self.best_params:
             print("Hiperparametru optimizavimas nebuvo atliktas arba nebaigtas.")
@@ -326,7 +481,11 @@ class XGBoostImputer:
     def get_cv_metrics_df(self):
         """
         Grąžina CV metrikas kaip DataFrame su vidurkiais ir standartinėmis paklaidomis.
-        Formatuota: 'vidurkis ± std' string'ais ir atskirais stulpeliais vidurkiams.
+
+        NAUDOJAMA: Jupyter Notebook (lentelių generavimui)
+
+        Returns:
+            pd.DataFrame: CV metrikos formatuotos kaip 'vidurkis +/- std'
         """
         if not self.cv_scores:
             return pd.DataFrame()
@@ -357,6 +516,11 @@ class XGBoostImputer:
     def get_cv_summary(self):
         """
         Grąžina bendrą CV suvestinę (vidurkiai per visus rodiklius).
+
+        NAUDOJAMA: Jupyter Notebook
+
+        Returns:
+            dict: Bendri CV vidurkiai ir standartinės paklaidos
         """
         if not self.cv_scores:
             return {}
@@ -384,7 +548,9 @@ class XGBoostImputer:
 
     def print_cv_results(self):
         """
-        Spausdina CV rezultatus į konsolę.
+        Spausdina CV rezultatus į konsolę (išsami ataskaita).
+
+        NAUDOJAMA: Jupyter Notebook
         """
         cv_df = self.get_cv_metrics_df()
         summary = self.get_cv_summary()
@@ -414,12 +580,87 @@ class XGBoostImputer:
             print(f"  sMAPE: {row['SMAPE_formatted']}%")
         print("\n" + "=" * 90)
 
-    # ============================================================================
-    # DATA PREPARATION
-    # ============================================================================
+    def get_shrinkage_report(self):
+        """
+        Grąžina ataskaitą apie pritaikytą hibridinį post-processing.
+
+        NAUDOJAMA: Jupyter Notebook
+
+        Returns:
+            dict: Informacija apie koreguotas prognozes pagal rodiklius
+        """
+        return self.shrinkage_applied
+
+    def print_shrinkage_summary(self):
+        """
+        Spausdina suvestinę apie hibridinį post-processing.
+
+        NAUDOJAMA: Jupyter Notebook
+        """
+        if not self.shrinkage_applied:
+            print("Post-processing nebuvo pritaikytas arba nebuvo reikalingas.")
+            return
+
+        print("=" * 80)
+        print("HIBRIDINIS POST-PROCESSING SUVESTINE (XGBoost)")
+        print("(Empirical Bayes Shrinkage + Ribos)")
+        print("=" * 80)
+
+        total_adjustments = 0
+        shrinkage_count = 0
+        bounds_count = 0
+
+        for target_col, adjustments in self.shrinkage_applied.items():
+            if adjustments:
+                total_adjustments += len(adjustments)
+                col_shrinkage = sum(1 for a in adjustments if a.get('method') == 'shrinkage')
+                col_bounds = sum(1 for a in adjustments if a.get('method') == 'bounds')
+                shrinkage_count += col_shrinkage
+                bounds_count += col_bounds
+
+                print(f"\n{target_col}:")
+                print(f"  Koreguotu prognoziu: {len(adjustments)}")
+                print(f"    - Empirical Bayes Shrinkage: {col_shrinkage}")
+                print(f"    - Ribos (safety): {col_bounds}")
+
+                # Rodome kelis pavyzdžius
+                examples = adjustments[:5]
+                if examples:
+                    print("  Pavyzdziai:")
+                    for adj in examples:
+                        geo = adj.get('geo', '?')
+                        year = adj.get('year', '?')
+                        orig = adj.get('original_pred', 0)
+                        final = adj.get('adjusted_pred', 0)
+                        method = adj.get('method', '?')
+                        shrink_w = adj.get('shrinkage_weight', 0)
+                        print(f"    {geo} ({year}): {orig:.2f} -> {final:.2f} "
+                              f"[{method}, w={shrink_w:.2f}]")
+
+        print(f"\nViso koreguotu prognoziu: {total_adjustments}")
+        print(f"  - Empirical Bayes Shrinkage: {shrinkage_count}")
+        print(f"  - Ribos: {bounds_count}")
+        print("=" * 80)
+
+    # ==========================================================================
+    # 3.3. DUOMENŲ PARUOŠIMAS (PRIVATE)
+    # ==========================================================================
+    # Vidiniai metodai duomenų validavimui ir paruošimui
 
     def _prepare_dataframe(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Paruošia DataFrame: kopijuoja ir konvertuoja object stulpelius."""
+        """
+        Paruošia DataFrame imputavimui.
+
+        Žingsniai:
+            1. Sukuria DataFrame kopiją
+            2. Konvertuoja ne-kategorinius 'object' stulpelius į numeric
+
+        Args:
+            df: Originalus DataFrame
+
+        Returns:
+            pd.DataFrame: Paruoštas DataFrame
+        """
         df_work = df.copy()
 
         # Konvertuojame ne-kategorinius 'object' į numeric
@@ -430,36 +671,65 @@ class XGBoostImputer:
         return df_work
 
     def _validate_categorical_columns(self, df: pd.DataFrame):
-        """Patikrina, kad kategoriniai stulpeliai neturi NaN."""
+        """
+        Patikrina, kad kategoriniai stulpeliai neturi NaN.
+
+        Pagal duomenų struktūrą 'geo' ir 'year' VISADA turi reikšmes.
+
+        Args:
+            df: DataFrame validavimui
+
+        Raises:
+            ValueError: Jei kategorinis stulpelis turi NaN
+        """
         for col in self.categorical_cols:
             if col in df.columns and df[col].isna().any():
                 raise ValueError(
                     f"Kategorinis stulpelis '{col}' turi trūkstamų reikšmių, "
-                    "pagal dizainą to neturėtų būti."
+                    "pagal duomenis to neturi būti."
                 )
 
     def _should_impute_column(self, df: pd.DataFrame, col: str) -> bool:
-        """Patikrina, ar stulpelis turėtų būti imputuojamas."""
+        """
+        Patikriname, ar stulpelis turėtų būti imputuojamas.
+
+        Stulpelis imputuojamas, jei:
+            1. Nėra kategorinis (ne 'geo' ar 'year')
+            2. Nėra exclude sąraše
+            3. Turi bent vieną NaN reikšmę
+
+        Args:
+            df: DataFrame
+            col: Stulpelio pavadinimas
+
+        Returns:
+            bool: True jei stulpelis turėtų būti imputuojamas
+        """
         return (
             col not in self.categorical_cols and
             col not in self.exclude_columns and
             df[col].isna().any()
         )
 
-    # ============================================================================
-    # GEO STATISTICS (Feature Engineering)
-    # ============================================================================
+    # ==========================================================================
+    # 3.4. GEO STATISTIKŲ SKAIČIAVIMAS (Feature Engineering)
+    # ==========================================================================
+    # Regionų statistikos naudojamos kaip papildomi features ir post-processing
 
     def _compute_geo_stats(self, df: pd.DataFrame, target_col: str) -> dict:
         """
         Apskaičiuoja regiono statistikas target stulpeliui.
 
         Kiekvienam regionui skaičiuojame:
-        - mean: vidurkis (ignoruojant 0 ir NaN)
-        - max: maksimumas
-        - min: minimumas
-        - std: standartinis nuokrypis
-        - trend: metinis pokytis (linijinės regresijos koeficientas)
+            - mean: vidurkis (ignoruojant 0 ir NaN)
+            - max: maksimumas
+            - min: minimumas
+            - std: standartinis nuokrypis
+            - trend: metinis pokytis (linijinės regresijos koeficientas)
+
+        Args:
+            df: DataFrame su duomenimis
+            target_col: Stulpelis, kuriam skaičiuojamos statistikos
 
         Returns:
             dict: {geo_value: {mean, max, min, std, trend}}
@@ -504,7 +774,6 @@ class XGBoostImputer:
                 if len(geo_df) >= 2:
                     years = geo_df['year'].values
                     values = geo_df[target_col].values
-                    # Paprastas linijinis trend (least squares)
                     if np.std(years) > 0:
                         geo_trend = float(np.polyfit(years, values, 1)[0])
 
@@ -523,18 +792,25 @@ class XGBoostImputer:
         Prideda regiono statistikas kaip papildomus features.
 
         Pridedami stulpeliai:
-        - _geo_mean: regiono vidurkis
-        - _geo_max: regiono maksimumas
-        - _geo_min: regiono minimumas
-        - _geo_std: regiono standartinis nuokrypis
-        - _geo_trend: regiono metinis trend
+            - _geo_mean: regiono vidurkis
+            - _geo_max: regiono maksimumas
+            - _geo_min: regiono minimumas
+            - _geo_std: regiono standartinis nuokrypis
+            - _geo_trend: regiono metinis trend
+
+        Args:
+            df: DataFrame
+            target_col: Target stulpelis
+            geo_stats: Apskaičiuotos geo statistikos
+
+        Returns:
+            pd.DataFrame: DataFrame su pridėtais geo features
         """
         df_copy = df.copy()
 
         if 'geo' not in df.columns or not geo_stats:
             return df_copy
 
-        # Sukuriame naujus stulpelius
         prefix = f"_geo_{target_col}_"
         df_copy[f'{prefix}mean'] = df_copy['geo'].map(lambda x: geo_stats.get(x, {}).get('mean', 0.0))
         df_copy[f'{prefix}max'] = df_copy['geo'].map(lambda x: geo_stats.get(x, {}).get('max', 0.0))
@@ -550,63 +826,65 @@ class XGBoostImputer:
         cols_to_drop = [c for c in df.columns if c.startswith(prefix)]
         return df.drop(columns=cols_to_drop, errors='ignore')
 
-    # ============================================================================
-    # COLUMN IMPUTATION
-    # ============================================================================
+    # ==========================================================================
+    # 3.5. STULPELIO IMPUTAVIMAS
+    # ==========================================================================
+    # Pagrindinis imputavimo procesas vienam stulpeliui
 
     def _impute_column(self, df_work: pd.DataFrame, target_col: str):
         """
-        Imputuoja vieną stulpelį.
+        Imputuoja vieną stulpelį su trūkstamomis reikšmėmis.
 
         SVARBU: Naudojame self._df_original (originalias reikšmes) kaip features,
-        kad išvengtume "cascade error" - kai vieno stulpelio imputuotos reikšmės
-        klaidingai įtakoja kitų stulpelių imputavimą.
+        kad išvengtume "cascade error".
 
         Procesas:
-        1. Apskaičiuoja geo statistikas IŠ ORIGINALIŲ duomenų
-        2. Prideda geo statistikas kaip features
-        3. Synthetic test (20%) be 0 reikšmių
-        4. Treniruoja ir vertina modelį
-        5. Pertreniruoja ant 100% duomenų
-        6. Imputuoja NaN reikšmes su post-processing apribojimu (jei įjungta)
-        7. Pašalina laikinus geo features
+            1. Apskaičiuoja geo statistikas IŠ ORIGINALIŲ duomenų
+            2. Prideda geo statistikas kaip features
+            3. Sukuria synthetic test (20%) be 0 reikšmių
+            4. Treniruoja ir vertina modelį
+            5. Pertreniruoja ant 100% duomenų
+            6. Imputuoja NaN reikšmes su post-processing (jei įjungta)
+
+        Args:
+            df_work: DataFrame, kuriame bus užpildytos NaN reikšmės
+            target_col: Stulpelis imputavimui
         """
-        # SVARBU: Naudojame ORIGINALIAS reikšmes features skaičiavimui
+        # Naudojame ORIGINALIAS reikšmes features skaičiavimui
         df_features = self._df_original
 
-        # 1. Apskaičiuojame geo statistikas IŠ ORIGINALIŲ duomenų
+        # Žingsnis 1: Apskaičiuojame geo statistikas
         geo_stats = self._compute_geo_stats(df_features, target_col)
         self.geo_stats[target_col] = geo_stats
 
-        # 2. Pridedame geo statistikas kaip features (naudojame ORIGINALIAS reikšmes)
+        # Žingsnis 2: Pridedame geo statistikas kaip features
         df_with_geo = self._add_geo_features(df_features, target_col, geo_stats)
 
         feature_cols = [c for c in df_with_geo.columns if c != target_col]
         known_mask = df_with_geo[target_col].notna()
 
-        # Fallback į mean, jei per mažai duomenų
+        # Žingsnis 3: Fallback į mean, jei per mažai duomenų
         if known_mask.sum() < 5:
             self._fallback_mean_impute(df_work, target_col, known_mask)
             return
 
-        # Paruošiame duomenis (naudojame ORIGINALIAS reikšmes su geo features)
+        # Žingsnis 4: Paruošiame duomenis
         X_all_raw = df_with_geo.loc[known_mask, feature_cols].copy()
         y_all = df_with_geo.loc[known_mask, target_col].copy()
 
-        # Train/Test split be 0 reikšmių test'e
+        # Žingsnis 5: Train/Test split
         train_mask, test_mask = self._create_train_test_split(y_all)
 
+        # Žingsnis 6: Modelio treniravimas
         if test_mask.sum() == 0 or train_mask.sum() == 0:
-            # Jei nėra tinkamo test seto, treniruojame ant visų duomenų
             self._train_without_test(X_all_raw, y_all, target_col, feature_cols)
         else:
-            # Normalus train/test scenarijus
             self._train_with_test(
                 X_all_raw, y_all, train_mask, test_mask,
                 target_col, feature_cols
             )
 
-        # Galutinė imputacija su post-processing apribojimu (jei įjungta)
+        # Žingsnis 7: Galutinė imputacija
         if self.use_post_processing:
             self._perform_final_imputation_with_bounds(
                 df_work, df_with_geo, target_col, feature_cols, geo_stats
@@ -616,45 +894,41 @@ class XGBoostImputer:
                 df_work, df_with_geo, target_col, feature_cols
             )
 
-        # Išsaugome feature importance
+        # Žingsnis 8: Išsaugome feature importance
         self._save_feature_importance(target_col)
 
     def _fallback_mean_impute(self, df: pd.DataFrame, target_col: str, known_mask):
         """
         Fallback: imputuoja su mean + year-based variation, jei per mažai duomenų.
 
-        v4: Pridedame variaciją net ir fallback atveju, kad reikšmės nebūtų vienodos.
+        Args:
+            df: DataFrame imputavimui
+            target_col: Target stulpelis
+            known_mask: Mask su žinomų reikšmių pozicijomis
         """
         known_values = df.loc[known_mask, target_col]
         fill_value = known_values.mean()
         fill_std = known_values.std() if len(known_values) > 1 else abs(fill_value) * 0.1
 
-        # Jei std = 0, naudojame 10% nuo mean
         if fill_std < 1e-10:
             fill_std = abs(fill_value) * 0.1 if fill_value != 0 else 1.0
 
         missing_mask = ~known_mask
 
-        # v4: Pridedame year-based variation
+        # Year-based variation
         if 'year' in df.columns and missing_mask.any():
             years = df.loc[missing_mask, 'year'].values
             mean_year = int(np.median(df['year'].values))
 
             imputed_values = []
             for i, year in enumerate(years):
-                # Deterministinis seed
                 geo = df.loc[missing_mask].iloc[i]['geo'] if 'geo' in df.columns else 'unknown'
                 seed = hash(f"{geo}_{year}_{target_col}_fallback_v4") % 100000
                 np.random.seed(seed)
 
-                # Year-based jitter (8-15% nuo std)
                 jitter_pct = 0.08 + (year - 2000) * 0.003
                 jitter_base = fill_std * min(jitter_pct, 0.15)
-
-                # Systematic year offset (2% nuo std per metus)
                 year_offset = (year - mean_year) * fill_std * 0.02
-
-                # Random jitter + year offset
                 random_jitter = np.random.normal(0, jitter_base)
                 total_variation = random_jitter + year_offset
 
@@ -674,20 +948,27 @@ class XGBoostImputer:
             'total_samples': int(known_mask.sum())
         }
 
-    # ============================================================================
-    # TRAIN/TEST SPLIT
-    # ============================================================================
+    # ==========================================================================
+    # 3.6. TRAIN/TEST PADALIJIMAS
+    # ==========================================================================
+    # Synthetic test set sukūrimas modelio vertinimui
 
     def _create_train_test_split(self, y_all: pd.Series):
         """
         Sukuria train/test split'ą, filtruojant 0 reikšmes iš test'o.
 
         0 reikšmės grąžinamos į train (reali informacija),
-        bet nenaudojamos test'ui (kad išvengti šališkumo).
+        bet nenaudojamos test'ui (kad išvengtume šališkumo).
+
+        Args:
+            y_all: Target reikšmės
+
+        Returns:
+            tuple: (train_mask, test_mask) - boolean masyvai
         """
         all_indices = y_all.index.to_numpy()
 
-        # Pradinis split
+        # Pradinis 80/20 split
         train_mask, test_mask = self._split_indices(all_indices, test_frac=0.2)
 
         # Filtruojame 0 reikšmes iš test'o
@@ -698,7 +979,16 @@ class XGBoostImputer:
         return train_mask, test_mask
 
     def _split_indices(self, indices, test_frac=0.2):
-        """Atsitiktinai paskirsto indeksus į train/test."""
+        """
+        Atsitiktinai paskirsto indeksus į train/test.
+
+        Args:
+            indices: Indeksų masyvas
+            test_frac: Test dalies proporcija (default 0.2 = 20%)
+
+        Returns:
+            tuple: (train_mask, test_mask)
+        """
         rng = np.random.RandomState(self.random_state)
 
         if len(indices) == 0:
@@ -713,36 +1003,43 @@ class XGBoostImputer:
 
         return train_mask, test_mask
 
-    # ============================================================================
-    # MODEL TRAINING
-    # ============================================================================
+    # ==========================================================================
+    # 3.7. MODELIO TRENIRAVIMAS
+    # ==========================================================================
+    # XGBoost modelio treniravimas su/be test set vertinimo
 
     def _train_without_test(self, X_all_raw, y_all, target_col, feature_cols):
-        """Treniruoja modelį be test seto vertinimo."""
+        """
+        Treniruoja modelį be test seto vertinimo.
+
+        Naudojama, kai nėra pakankamai ne-nulinių reikšmių test setui.
+
+        Args:
+            X_all_raw: Feature DataFrame
+            y_all: Target reikšmės
+            target_col: Target stulpelio pavadinimas
+            feature_cols: Feature stulpelių sąrašas
+        """
         num_cols, cat_cols = self._get_column_groups(X_all_raw, feature_cols)
 
-        # Paruošiame transformerius ir duomenis
-        num_imputer, encoder = self._fit_transformers(
-            X_all_raw, num_cols, cat_cols
-        )
-        X_all = self._apply_transformations(
-            X_all_raw, num_cols, cat_cols, num_imputer, encoder
-        )
+        # Žingsnis 1: Paruošiame transformerius
+        num_imputer, encoder = self._fit_transformers(X_all_raw, num_cols, cat_cols)
+        X_all = self._apply_transformations(X_all_raw, num_cols, cat_cols, num_imputer, encoder)
 
-        # Jei įjungtas hyperopt - pirma randame geriausius parametrus
+        # Žingsnis 2: Hiperparametrų optimizavimas (jei įjungta)
         if self.use_hyperopt:
             best_params = self._perform_hyperopt(X_all, y_all.values, target_col)
         else:
             best_params = None
 
-        # Treniruojame modelį su geriausiais parametrais
+        # Žingsnis 3: Treniruojame modelį
         model = self._create_model_with_params(best_params)
         model.fit(X_all, y_all.values)
 
-        # Išsaugome modelį
+        # Žingsnis 4: Išsaugome modelį
         self._save_model(target_col, model, num_cols, cat_cols, num_imputer, encoder)
 
-        # Metrika be testavimo
+        # Žingsnis 5: Metrikos (nėra test seto)
         self.model_metrics[target_col] = {
             'nrmse': float('nan'),
             'r2': float('nan'),
@@ -757,8 +1054,27 @@ class XGBoostImputer:
         self, X_all_raw, y_all, train_mask, test_mask,
         target_col, feature_cols
     ):
-        """Treniruoja modelį su test seto vertinimu."""
-        # Padalijame duomenis
+        """
+        Treniruoja modelį su test seto vertinimu.
+
+        Procesas:
+            1. Padalija duomenis į train/test
+            2. Paruošia transformerius ant VISŲ duomenų
+            3. Atlieka hiperparametrų optimizavimą (jei įjungta)
+            4. Treniruoja vertinimo modelį ant TRAIN
+            5. Vertina ant TEST
+            6. Atlieka kryžminę validaciją
+            7. Treniruoja galutinį modelį ant 100% duomenų
+
+        Args:
+            X_all_raw: Visi feature duomenys
+            y_all: Visos target reikšmės
+            train_mask: Train pozicijų mask
+            test_mask: Test pozicijų mask
+            target_col: Target stulpelio pavadinimas
+            feature_cols: Feature stulpelių sąrašas
+        """
+        # Žingsnis 1: Padalijame duomenis
         X_train_raw = X_all_raw.loc[train_mask].copy()
         X_test_raw = X_all_raw.loc[test_mask].copy()
         y_train = y_all.loc[train_mask].copy()
@@ -766,66 +1082,51 @@ class XGBoostImputer:
 
         num_cols, cat_cols = self._get_column_groups(X_all_raw, feature_cols)
 
-        # Paruošiame PILNUS duomenis transformacijoms
-        num_imputer_full, encoder_full = self._fit_transformers(
-            X_all_raw, num_cols, cat_cols
-        )
-        X_all = self._apply_transformations(
-            X_all_raw, num_cols, cat_cols, num_imputer_full, encoder_full
-        )
+        # Žingsnis 2: Paruošiame transformerius ant VISŲ duomenų
+        num_imputer_full, encoder_full = self._fit_transformers(X_all_raw, num_cols, cat_cols)
+        X_all = self._apply_transformations(X_all_raw, num_cols, cat_cols, num_imputer_full, encoder_full)
 
-        # Jei įjungtas hyperopt - pirma randame geriausius parametrus
+        # Žingsnis 3: Hiperparametrų optimizavimas (jei įjungta)
         if self.use_hyperopt:
             best_params = self._perform_hyperopt(X_all, y_all.values, target_col)
         else:
             best_params = None
 
-        # Vertinimo transformacijos (fit tik ant TRAIN)
-        num_imputer_eval, encoder_eval = self._fit_transformers(
-            X_train_raw, num_cols, cat_cols
-        )
-        X_train = self._apply_transformations(
-            X_train_raw, num_cols, cat_cols, num_imputer_eval, encoder_eval
-        )
-        X_test = self._apply_transformations(
-            X_test_raw, num_cols, cat_cols, num_imputer_eval, encoder_eval
-        )
+        # Žingsnis 4: Vertinimo transformacijos (fit tik ant TRAIN)
+        num_imputer_eval, encoder_eval = self._fit_transformers(X_train_raw, num_cols, cat_cols)
+        X_train = self._apply_transformations(X_train_raw, num_cols, cat_cols, num_imputer_eval, encoder_eval)
+        X_test = self._apply_transformations(X_test_raw, num_cols, cat_cols, num_imputer_eval, encoder_eval)
 
-        # Treniruojame vertinimo modelį su geriausiais parametrais (jei rasti)
+        # Žingsnis 5: Treniruojame vertinimo modelį
         model_eval = self._create_model_with_params(best_params)
         model_eval.fit(X_train, y_train.values)
         y_pred = model_eval.predict(X_test)
 
-        # Skaičiuojame metrikos
+        # Žingsnis 6: Skaičiuojame metrikos
         self._save_test_metrics(target_col, y_test, y_pred, len(y_all))
 
-        # Cross-validation su geriausiais parametrais (arba default)
-        self._perform_cross_validation(
-            X_train, y_train.values, target_col, best_params
-        )
+        # Žingsnis 7: Kryžminė validacija
+        self._perform_cross_validation(X_train, y_train.values, target_col, best_params)
 
-        # Galutinis modelis ant 100% duomenų su geriausiais parametrais
+        # Žingsnis 8: Galutinis modelis ant 100% duomenų
         model_full = self._create_model_with_params(best_params)
         model_full.fit(X_all, y_all.values)
 
-        # Išsaugome galutinį modelį
-        self._save_model(
-            target_col, model_full, num_cols, cat_cols,
-            num_imputer_full, encoder_full
-        )
+        # Žingsnis 9: Išsaugome galutinį modelį
+        self._save_model(target_col, model_full, num_cols, cat_cols, num_imputer_full, encoder_full)
 
     def _perform_cross_validation(self, X, y, target_col, params=None):
         """
-        Atlieka kryžminę validaciją (cross-validation) ir išsaugo rezultatus.
+        Atlieka kryžminę validaciją ir išsaugo rezultatus.
+
         Skaičiuoja visas 4 metrikas: R², nRMSE, nMAE, sMAPE.
 
         Args:
             X: Transformuoti feature duomenys (numpy array)
             y: Target reikšmės (numpy array)
             target_col: Stulpelio pavadinimas
-            params: dict su hiperparametrais (jei None, naudoja default)
+            params: Hiperparametrai (jei None, naudoja default)
         """
-        # Apsauga nuo per mažo duomenų kiekio
         cv_folds = min(self.cv_folds, len(y))
         if cv_folds < 2:
             self.cv_scores[target_col] = {
@@ -837,60 +1138,40 @@ class XGBoostImputer:
             }
             return
 
-        # Inicializuojame metrikų sąrašus
-        r2_scores = []
-        nrmse_scores = []
-        nmae_scores = []
-        smape_scores = []
+        r2_scores, nrmse_scores, nmae_scores, smape_scores = [], [], [], []
 
-        # KFold cross-validation
         kfold = KFold(n_splits=cv_folds, shuffle=True, random_state=self.random_state)
 
         for train_idx, val_idx in kfold.split(X):
             X_train_cv, X_val_cv = X[train_idx], X[val_idx]
             y_train_cv, y_val_cv = y[train_idx], y[val_idx]
 
-            # Sukuriame modelį su nurodytais parametrais (arba default)
             model_cv = self._create_model_with_params(params)
             model_cv.fit(X_train_cv, y_train_cv)
             y_pred_cv = model_cv.predict(X_val_cv)
 
-            # Skaičiuojame metrikas
+            # Metrikos
             r2 = r2_score(y_val_cv, y_pred_cv)
             rmse = np.sqrt(mean_squared_error(y_val_cv, y_pred_cv))
             mae = np.mean(np.abs(y_val_cv - y_pred_cv))
             smape = self._calculate_smape(y_val_cv, y_pred_cv)
 
-            # Normalizuojame pagal y_val diapazoną
+            # Normalizuojame
             y_range = float(np.max(y_val_cv) - np.min(y_val_cv))
-            if y_range > 0:
-                nrmse = rmse / y_range
-                nmae = mae / y_range
-            else:
-                nrmse = rmse
-                nmae = mae
+            nrmse = rmse / y_range if y_range > 0 else rmse
+            nmae = mae / y_range if y_range > 0 else mae
 
             r2_scores.append(r2)
             nrmse_scores.append(nrmse)
             nmae_scores.append(nmae)
             smape_scores.append(smape)
 
-        # Išsaugome rezultatus
         self.cv_scores[target_col] = {
-            'r2_scores': r2_scores,
-            'r2_mean': float(np.mean(r2_scores)),
-            'r2_std': float(np.std(r2_scores)),
-            'nrmse_scores': nrmse_scores,
-            'nrmse_mean': float(np.mean(nrmse_scores)),
-            'nrmse_std': float(np.std(nrmse_scores)),
-            'nmae_scores': nmae_scores,
-            'nmae_mean': float(np.mean(nmae_scores)),
-            'nmae_std': float(np.std(nmae_scores)),
-            'smape_scores': smape_scores,
-            'smape_mean': float(np.mean(smape_scores)),
-            'smape_std': float(np.std(smape_scores)),
-            'cv_folds': cv_folds,
-            'sample_size': len(y)
+            'r2_scores': r2_scores, 'r2_mean': float(np.mean(r2_scores)), 'r2_std': float(np.std(r2_scores)),
+            'nrmse_scores': nrmse_scores, 'nrmse_mean': float(np.mean(nrmse_scores)), 'nrmse_std': float(np.std(nrmse_scores)),
+            'nmae_scores': nmae_scores, 'nmae_mean': float(np.mean(nmae_scores)), 'nmae_std': float(np.std(nmae_scores)),
+            'smape_scores': smape_scores, 'smape_mean': float(np.mean(smape_scores)), 'smape_std': float(np.std(smape_scores)),
+            'cv_folds': cv_folds, 'sample_size': len(y)
         }
 
     def _create_model_with_params(self, params=None):
@@ -938,25 +1219,18 @@ class XGBoostImputer:
         """
         Grąžina hiperparametrų paskirstymus Randomized Search CV.
 
-        Parinktys optimizuotos XGBoost ekonominių rodiklių imputavimui:
-        - n_estimators: 50-300 (iteraciju skaicius)
-        - learning_rate: 0.01-0.3 (mokymosi greitis)
-        - max_depth: 3-15 (medzio gylis)
-        - subsample: 0.6-1.0 (eiluciu atranka)
-        - colsample_bytree: 0.6-1.0 (stulpeliu atranka)
-        - min_child_weight: 1-10 (minimalus lapo svoris)
-        - reg_alpha: 0-1 (L1 regularizacija)
-        - reg_lambda: 0-1 (L2 regularizacija)
+        Returns:
+            dict: Parametrų paskirstymai
         """
         return {
-            'n_estimators': randint(50, 301),  # 50-300
-            'learning_rate': uniform(0.01, 0.29),  # 0.01-0.3
-            'max_depth': randint(3, 16),  # 3-15
-            'subsample': uniform(0.6, 0.4),  # 0.6-1.0
-            'colsample_bytree': uniform(0.6, 0.4),  # 0.6-1.0
-            'min_child_weight': randint(1, 11),  # 1-10
-            'reg_alpha': uniform(0, 1),  # 0-1
-            'reg_lambda': uniform(0, 1)  # 0-1
+            'n_estimators': randint(50, 301),
+            'learning_rate': uniform(0.01, 0.29),
+            'max_depth': randint(3, 16),
+            'subsample': uniform(0.6, 0.4),
+            'colsample_bytree': uniform(0.6, 0.4),
+            'min_child_weight': randint(1, 11),
+            'reg_alpha': uniform(0, 1),
+            'reg_lambda': uniform(0, 1)
         }
 
     def _perform_hyperopt(self, X, y, target_col):
@@ -966,12 +1240,11 @@ class XGBoostImputer:
         Args:
             X: Feature matrica (numpy array)
             y: Target reikšmės (numpy array)
-            target_col: Stulpelio pavadinimas (metrikų saugojimui)
+            target_col: Stulpelio pavadinimas
 
         Returns:
             dict: Geriausi rasti parametrai
         """
-        # Bazinis modelis
         base_model = xgb.XGBRegressor(
             random_state=self.random_state,
             verbosity=0,
@@ -979,13 +1252,10 @@ class XGBoostImputer:
             eval_metric='rmse'
         )
 
-        # Parametrų paskirstymai
         param_distributions = self._get_param_distributions()
 
-        # CV folds skaičius (minimaliai 2)
         cv_folds = min(self.hyperopt_cv, len(y))
         if cv_folds < 2:
-            # Per mažai duomenų - grąžiname default parametrus
             return {
                 'n_estimators': self.n_estimators,
                 'learning_rate': self.learning_rate,
@@ -997,37 +1267,43 @@ class XGBoostImputer:
                 'reg_lambda': self.reg_lambda
             }
 
-        # Iteracijų skaičius (sumažiname jei mažai duomenų)
         n_iter = min(self.hyperopt_n_iter, 50) if len(y) < 100 else self.hyperopt_n_iter
 
-        # RandomizedSearchCV
         random_search = RandomizedSearchCV(
             estimator=base_model,
             param_distributions=param_distributions,
             n_iter=n_iter,
             cv=cv_folds,
-            scoring='r2',  # Optimizuojame R²
+            scoring='r2',
             random_state=self.random_state,
-            n_jobs=6,  # 6 threads
+            n_jobs=6,
             verbose=0,
             return_train_score=False
         )
 
-        # Vykdome paiešką
         random_search.fit(X, y)
 
-        # Išsaugome geriausius parametrus
         best_params = random_search.best_params_
         self.best_params[target_col] = best_params
 
         return best_params
 
-    # ============================================================================
-    # FEATURE TRANSFORMATIONS
-    # ============================================================================
+    # ==========================================================================
+    # 3.8. FEATURE TRANSFORMACIJOS
+    # ==========================================================================
+    # Skaitinių ir kategorinių feature'ų transformavimas
 
     def _get_column_groups(self, X: pd.DataFrame, feature_cols):
-        """Paskirsto stulpelius į skaitmeninius ir kategorinius."""
+        """
+        Paskirsto stulpelius į skaitmeninius ir kategorinius.
+
+        Args:
+            X: Feature DataFrame
+            feature_cols: Visų feature stulpelių sąrašas
+
+        Returns:
+            tuple: (num_cols, cat_cols)
+        """
         num_cols = [
             c for c in feature_cols
             if pd.api.types.is_numeric_dtype(X[c]) and c not in self.categorical_cols
@@ -1036,7 +1312,17 @@ class XGBoostImputer:
         return num_cols, cat_cols
 
     def _fit_transformers(self, X_raw, num_cols, cat_cols):
-        """Sukuria ir fit'ina transformerius."""
+        """
+        Sukuria ir fit'ina transformerius.
+
+        Args:
+            X_raw: Raw feature DataFrame
+            num_cols: Skaitinių stulpelių sąrašas
+            cat_cols: Kategorinių stulpelių sąrašas
+
+        Returns:
+            tuple: (num_imputer, encoder)
+        """
         # Skaitinių stulpelių imputer (ignoruoja 0)
         num_imputer = None
         if num_cols:
@@ -1055,7 +1341,19 @@ class XGBoostImputer:
         return num_imputer, encoder
 
     def _apply_transformations(self, X_raw, num_cols, cat_cols, num_imputer, encoder):
-        """Pritaiko transformacijas ir grąžina numpy array."""
+        """
+        Pritaiko transformacijas ir grąžina numpy array.
+
+        Args:
+            X_raw: Raw feature DataFrame
+            num_cols: Skaitinių stulpelių sąrašas
+            cat_cols: Kategorinių stulpelių sąrašas
+            num_imputer: Skaitinių stulpelių imputer
+            encoder: Kategorinių stulpelių encoder
+
+        Returns:
+            np.ndarray: Transformuota feature matrica
+        """
         # Skaitiniai
         if num_cols and num_imputer:
             X_num = num_imputer.transform(X_raw[num_cols])
@@ -1070,27 +1368,32 @@ class XGBoostImputer:
 
         return np.hstack([X_num, X_cat])
 
-    # ============================================================================
-    # FINAL IMPUTATION
-    # ============================================================================
+    # ==========================================================================
+    # 3.9. GALUTINĖ IMPUTACIJA SU POST-PROCESSING
+    # ==========================================================================
+    # NaN reikšmių užpildymas su Empirical Bayes Shrinkage
 
     def _perform_final_imputation(self, df: pd.DataFrame, df_with_geo: pd.DataFrame,
                                    target_col: str, feature_cols: list):
         """
-        Atlieka galutinę imputaciją be post-processing.
+        Atlieka galutinę imputaciją BE post-processing.
 
         SVARBU: 0 reikšmės NĖRA imputuojamos - jos lieka 0.
+
+        Args:
+            df: DataFrame, kuriame užpildysime NaN
+            df_with_geo: DataFrame su geo features
+            target_col: Target stulpelis
+            feature_cols: Feature stulpelių sąrašas
         """
         missing_mask = df[target_col].isna()
 
         if not missing_mask.any():
             return
 
-        # Naudojame df_with_geo (su geo features) prognozavimui
         X_missing_raw = df_with_geo.loc[missing_mask, feature_cols].copy()
         model_info = self.models[target_col]
 
-        # Transformuojame trūkstamus duomenis
         X_missing = self._apply_transformations(
             X_missing_raw,
             model_info['num_cols'],
@@ -1099,7 +1402,6 @@ class XGBoostImputer:
             model_info['encoder']
         )
 
-        # Predikcija ir užpildymas
         predictions = model_info['model'].predict(X_missing)
         df.loc[missing_mask, target_col] = predictions
 
@@ -1108,22 +1410,29 @@ class XGBoostImputer:
         target_col: str, feature_cols: list, geo_stats: dict
     ):
         """
-        Atlieka galutinę imputaciją su HIBRIDINIU post-processing:
-        1. Empirical Bayes Shrinkage (minkštas koregavimas)
-        2. Kietosios ribos (safety net)
+        Atlieka galutinę imputaciją SU HIBRIDINIU post-processing.
+
+        Hibridinis post-processing:
+            1. Empirical Bayes Shrinkage (minkštas koregavimas)
+            2. Ribos (safety net)
 
         SVARBU: 0 reikšmės NĖRA imputuojamos - jos lieka 0.
+
+        Args:
+            df: DataFrame, kuriame užpildysime NaN
+            df_with_geo: DataFrame su geo features
+            target_col: Target stulpelis
+            feature_cols: Feature stulpelių sąrašas
+            geo_stats: Geo statistikos post-processing
         """
         missing_mask = df[target_col].isna()
 
         if not missing_mask.any():
             return
 
-        # Naudojame df_with_geo (su geo features) prognozavimui
         X_missing_raw = df_with_geo.loc[missing_mask, feature_cols].copy()
         model_info = self.models[target_col]
 
-        # Transformuojame trūkstamus duomenis
         X_missing = self._apply_transformations(
             X_missing_raw,
             model_info['num_cols'],
@@ -1152,34 +1461,33 @@ class XGBoostImputer:
         year_values: np.ndarray, geo_stats: dict, target_col: str
     ) -> np.ndarray:
         """
-        PATOBULINTA v4 Hibridinis post-processing: MINIMALUS Shrinkage + Year-based Variation.
-
-        PROBLEMA v3: Per daug vienodų reikšmių, nes shrinkage pritraukdavo prie to paties vidurkio.
-
-        SPRENDIMAS v4:
-        1. MINIMALUS shrinkage - tik ekstremaliems atvejams (>4σ)
-        2. YEAR-BASED VARIATION - kiekvieni metai gauna unikalų offset pagal trend
-        3. IŠLAIKOMA XGB VARIACIJA - XGB prognozės išlaikomos maksimaliai
-        4. DIDESNIS JITTER - užtikrina unikalias reikšmes
+        Hibridinis post-processing: MINIMALUS Shrinkage + Year-based Variation.
 
         Algoritmas:
-        1. XGB prognozė išlaikoma beveik nepakeista (95%+ išlaikoma)
-        2. Shrinkage taikomas TIK kai nuokrypis > 4σ nuo year_specific_mean
-        3. Year-based jitter užtikrina, kad skirtingi metai turi skirtingas reikšmes
-        4. Kietosios ribos kaip safety net
+            1. XGB prognozė išlaikoma beveik nepakeista (95%+ išlaikoma)
+            2. Shrinkage taikomas TIK kai nuokrypis > 4sigma nuo year_specific_mean
+            3. Year-based jitter užtikrina unikalias reikšmes skirtingiems metams
+            4. Ribos kaip safety net
+
+        Args:
+            predictions: XGB prognozės
+            geo_values: Regionų reikšmės
+            year_values: Metų reikšmės (arba None)
+            geo_stats: Geo statistikos
+            target_col: Target stulpelio pavadinimas
 
         Returns:
-            np.ndarray: Koreguotos prognozės su išlaikyta variacija
+            np.ndarray: Koreguotos prognozės
         """
         adjusted = predictions.copy()
         shrinkage_info = []
 
-        # v4: MINIMALUS shrinkage - tik ekstremaliems atvejams
-        base_max_shrinkage = 0.10  # Sumažinta nuo 0.20 - išlaikome 90% XGB info
-        sigmoid_steepness = 0.4  # Sumažinta nuo 0.6 - dar švelnesnis perėjimas
-        base_shrinkage_k = self.shrinkage_k * 1.5  # Padidintas k - shrinkage pradedamas vėliau
+        # Post-processing parametrai
+        base_max_shrinkage = 0.10
+        sigmoid_steepness = 0.4
+        base_shrinkage_k = self.shrinkage_k * 1.5
 
-        # Apskaičiuojame globalų CV (coefficient of variation) rodikliui
+        # Globalus CV (coefficient of variation)
         all_means = [s.get('mean', 0) for s in geo_stats.values() if s.get('mean', 0) != 0]
         all_stds = [s.get('std', 0) for s in geo_stats.values()]
         if all_means and all_stds:
@@ -1189,22 +1497,19 @@ class XGBoostImputer:
         else:
             global_cv = 0
 
-        # Dinamiškas mean_year skaičiavimas
-        mean_year = 2012  # Default (vidurys 2000-2024)
+        # Mean year
+        mean_year = 2012
         if year_values is not None and len(year_values) > 0:
             mean_year = int(np.median(year_values))
 
-        # v4: Dar labiau sumažiname shrinkage pagal CV
+        # Adaptyvus shrinkage pagal CV
         if global_cv > 1.0:
-            # Didelis CV - praktiškai išjungiame shrinkage
             base_max_shrinkage = 0.05
             k_adaptive = base_shrinkage_k * 2.0
         elif global_cv > 0.5:
-            # Vidutinis CV - minimalus shrinkage
             base_max_shrinkage = 0.08
             k_adaptive = base_shrinkage_k * 1.5
         else:
-            # Mažas CV - šiek tiek daugiau shrinkage leidžiama
             k_adaptive = base_shrinkage_k
 
         for i, (pred, geo) in enumerate(zip(predictions, geo_values)):
@@ -1219,11 +1524,10 @@ class XGBoostImputer:
             geo_std = stats.get('std', 0)
             geo_trend = stats.get('trend', 0)
 
-            # Apsauga nuo dalybos iš nulio
             if geo_std < 1e-10:
                 geo_std = abs(geo_mean) * 0.1 if geo_mean != 0 else 1.0
 
-            # Year-specific target mean su trend
+            # Year-specific target mean
             year_specific_mean = geo_mean
             year = year_values[i] if year_values is not None else mean_year
             if geo_trend != 0:
@@ -1231,29 +1535,18 @@ class XGBoostImputer:
                 trend_adjustment = geo_trend * year_diff
                 year_specific_mean = geo_mean + trend_adjustment
 
-            # Skaičiuojame nuokrypį standartinėmis paklaidomis
             deviation = abs(pred - year_specific_mean)
             deviation_in_std = deviation / geo_std
 
-            # Nustatome ar duomenys gali būti neigiami
             allows_negative = geo_min < 0
 
-            # v4: Adaptyvus max_shrinkage - mažesnis, kai mažai duomenų
-            # Tai neleidžia per daug pritraukti prie vidurkio
+            # Adaptyvus max_shrinkage
             max_shrinkage_final = base_max_shrinkage
-
-            # Jei trend yra stiprus, dar labiau sumažiname shrinkage
             trend_strength = abs(geo_trend) / geo_std if geo_std > 0 else 0
             if trend_strength > 0.05:
                 max_shrinkage_final *= max(0.3, 1.0 - trend_strength * 2)
 
-            # ===== v5: GRIEŽTESNĖS KIETOSIOS RIBOS =====
-            # Problema: kai raw prognozė labai netinkama dėl NaN features,
-            # bounds turi būti griežtesni, kad imputuota reikšmė būtų artima
-            # žinomoms to regiono reikšmėms.
-            #
-            # Naudojame: year_specific_mean +/- 3*std (tradicinis 99.7% intervalas)
-            # Papildomai: max/min * 1.1 (leisti tik 10% viršyti žinomą diapazoną)
+            # Bounds
             if allows_negative:
                 if geo_std > 0:
                     lower_bound = max(geo_min * 1.1, year_specific_mean - 3 * geo_std)
@@ -1263,91 +1556,49 @@ class XGBoostImputer:
                     upper_bound = geo_max * 1.1
             else:
                 if geo_std > 0:
-                    # Teigiami duomenys - griežtesnės ribos
                     lower_bound = max(0, max(geo_min * 0.8, year_specific_mean - 3 * geo_std))
                     upper_bound = min(geo_max * 1.1, year_specific_mean + 3 * geo_std)
                 else:
                     lower_bound = max(0, geo_min * 0.8)
                     upper_bound = geo_max * 1.1
 
-            # ===== v4: MINIMALUS SHRINKAGE =====
-            # Shrinkage taikomas TIK kai nuokrypis > k_adaptive σ
-            # Ir net tada - labai švelniai
+            # Shrinkage
             sigmoid_input = (deviation_in_std - k_adaptive) * sigmoid_steepness
             w = max_shrinkage_final / (1 + np.exp(-sigmoid_input))
-
-            # v4: Papildomas ribojimas - shrinkage max 10% net ekstremaliems atvejams
             w = min(w, 0.10)
 
-            # Empirical Bayes Shrinkage formulė
             adjusted_pred = w * year_specific_mean + (1 - w) * pred
 
-            # ===== v6: SMART BOUNDS SU YEAR-BASED VARIACIJA =====
-            # Problema v5: kai prognozė viršija bounds, np.clip() sukuria vienodas reikšmes.
-            # Sprendimas: naudojame "soft bounds" - interpoliuojame tarp year_specific_mean
-            # ir bounds ribos, su year-based variacija.
-
+            # Smart bounds su year-based variacija
             if year_values is not None:
                 year = year_values[i]
 
-                # Deterministinis seed pagal geo, year ir target_col
                 seed = hash(f"{geo}_{year}_{target_col}_v6") % 100000
                 np.random.seed(seed)
 
-                # Bazinis jitter: 3-8% nuo geo_std (mažesnis nei v4, nes dabar visada pridedamas)
                 jitter_pct = 0.03 + (year - 2000) * 0.002
                 jitter_base = geo_std * min(jitter_pct, 0.08)
-
-                # Trend-based offset: skirtingi metai turi skirtingą offset
-                year_offset = (year - mean_year) * geo_std * 0.015  # 1.5% nuo std per metus
-
-                # Random jitter
+                year_offset = (year - mean_year) * geo_std * 0.015
                 random_jitter = np.random.normal(0, jitter_base)
 
-                # Skaičiuojame galutinę reikšmę priklausomai nuo to, ar viršijame bounds
                 if adjusted_pred > upper_bound:
-                    # Prognozė viršija upper_bound - interpoliuojame tarp year_mean ir upper_bound
-                    # Kuo labiau viršija, tuo arčiau upper_bound
                     overshoot_ratio = min((adjusted_pred - upper_bound) / (geo_std + 1e-9), 3.0)
-                    # Interpoliacijos koeficientas: 0.5 = viduryje tarp mean ir bound
-                    interp_factor = 0.5 + 0.15 * overshoot_ratio  # 0.5-0.95
-                    interp_factor = min(interp_factor, 0.92)  # Max 92% link bound
-
-                    # Interpoliuojame: year_mean -> upper_bound
+                    interp_factor = min(0.5 + 0.15 * overshoot_ratio, 0.92)
                     base_value = year_specific_mean + interp_factor * (upper_bound - year_specific_mean)
-                    final_pred = base_value + year_offset + random_jitter
-
-                    # Užtikriname, kad neviršijame upper_bound
-                    final_pred = min(final_pred, upper_bound)
-
+                    final_pred = min(base_value + year_offset + random_jitter, upper_bound)
                 elif adjusted_pred < lower_bound:
-                    # Prognozė žemiau lower_bound - interpoliuojame tarp year_mean ir lower_bound
                     undershoot_ratio = min((lower_bound - adjusted_pred) / (geo_std + 1e-9), 3.0)
-                    interp_factor = 0.5 + 0.15 * undershoot_ratio
-                    interp_factor = min(interp_factor, 0.92)
-
-                    # Interpoliuojame: year_mean -> lower_bound
+                    interp_factor = min(0.5 + 0.15 * undershoot_ratio, 0.92)
                     base_value = year_specific_mean - interp_factor * (year_specific_mean - lower_bound)
-                    final_pred = base_value + year_offset + random_jitter
-
-                    # Užtikriname, kad neeiname žemiau lower_bound
-                    final_pred = max(final_pred, lower_bound)
-
+                    final_pred = max(base_value + year_offset + random_jitter, lower_bound)
                 else:
-                    # Prognozė tarp bounds - tiesiog pridedame variaciją
-                    final_pred = adjusted_pred + year_offset + random_jitter
-                    # Clip jei reikia
-                    final_pred = np.clip(final_pred, lower_bound, upper_bound)
+                    final_pred = np.clip(adjusted_pred + year_offset + random_jitter, lower_bound, upper_bound)
             else:
-                # Jei nėra year info, tiesiog clip
                 final_pred = np.clip(adjusted_pred, lower_bound, upper_bound)
 
-            # Nustatome metodą ataskaitai
-            if w > 0.005:  # Mažesnis slenkstis
-                if final_pred != adjusted_pred:
-                    method = 'bounds'
-                else:
-                    method = 'shrinkage'
+            # Metodas ataskaitai
+            if w > 0.005:
+                method = 'bounds' if final_pred != adjusted_pred else 'shrinkage'
             elif final_pred != pred:
                 method = 'bounds'
             else:
@@ -1355,107 +1606,52 @@ class XGBoostImputer:
 
             adjusted[i] = final_pred
 
-            # Saugome info apie koregavimą (tik jei buvo koreguota)
             if method != 'none':
                 shrinkage_info.append({
-                    'geo': geo,
-                    'year': year,
-                    'original_pred': pred,
-                    'shrinkage_pred': adjusted_pred,
-                    'adjusted_pred': final_pred,
+                    'geo': geo, 'year': year,
+                    'original_pred': pred, 'shrinkage_pred': adjusted_pred, 'adjusted_pred': final_pred,
                     'bounds': (lower_bound, upper_bound),
-                    'geo_mean': geo_mean,
-                    'year_specific_mean': year_specific_mean,
-                    'geo_std': geo_std,
-                    'deviation_std': deviation_in_std,
-                    'shrinkage_weight': w,
-                    'trend': geo_trend,
-                    'method': method
+                    'geo_mean': geo_mean, 'year_specific_mean': year_specific_mean,
+                    'geo_std': geo_std, 'deviation_std': deviation_in_std,
+                    'shrinkage_weight': w, 'trend': geo_trend, 'method': method
                 })
 
-        # Išsaugome shrinkage informaciją
         if shrinkage_info:
             self.shrinkage_applied[target_col] = shrinkage_info
 
         return adjusted
 
-    def get_shrinkage_report(self):
-        """
-        Grąžina ataskaitą apie pritaikytą hibridinį post-processing.
-
-        Returns:
-            dict: Informacija apie koreguotas prognozes pagal rodiklius
-        """
-        return self.shrinkage_applied
-
-    def print_shrinkage_summary(self):
-        """
-        Spausdina suvestinę apie hibridinį post-processing (Empirical Bayes + ribos).
-        """
-        if not self.shrinkage_applied:
-            print("Post-processing nebuvo pritaikytas arba nebuvo reikalingas.")
-            return
-
-        print("=" * 80)
-        print("HIBRIDINIS POST-PROCESSING SUVESTINE (XGBoost)")
-        print("(Empirical Bayes Shrinkage + Kietosios Ribos)")
-        print("=" * 80)
-
-        total_adjustments = 0
-        shrinkage_count = 0
-        bounds_count = 0
-
-        for target_col, adjustments in self.shrinkage_applied.items():
-            if adjustments:
-                total_adjustments += len(adjustments)
-                col_shrinkage = sum(1 for a in adjustments if a.get('method') == 'shrinkage')
-                col_bounds = sum(1 for a in adjustments if a.get('method') == 'bounds')
-                shrinkage_count += col_shrinkage
-                bounds_count += col_bounds
-
-                print(f"\n{target_col}:")
-                print(f"  Koreguotu prognoziu: {len(adjustments)}")
-                print(f"    - Empirical Bayes Shrinkage: {col_shrinkage}")
-                print(f"    - Kietosios ribos (safety): {col_bounds}")
-
-                # Rodome kelis pavyzdžius
-                examples = adjustments[:5]
-                if examples:
-                    print("  Pavyzdziai:")
-                    for adj in examples:
-                        geo = adj.get('geo', '?')
-                        year = adj.get('year', '?')
-                        orig = adj.get('original_pred', 0)
-                        final = adj.get('adjusted_pred', 0)
-                        method = adj.get('method', '?')
-                        shrink_w = adj.get('shrinkage_weight', 0)
-                        print(f"    {geo} ({year}): {orig:.2f} -> {final:.2f} "
-                              f"[{method}, w={shrink_w:.2f}]")
-
-        print(f"\nViso koreguotu prognoziu: {total_adjustments}")
-        print(f"  - Empirical Bayes Shrinkage: {shrinkage_count}")
-        print(f"  - Kietosios ribos: {bounds_count}")
-        print("=" * 80)
-
-    # ============================================================================
-    # METRICS & STORAGE
-    # ============================================================================
+    # ==========================================================================
+    # 3.10. METRIKŲ SKAIČIAVIMAS IR SAUGOJIMAS
+    # ==========================================================================
+    # Test set metrikų skaičiavimas ir modelių/feature importance saugojimas
 
     def _save_test_metrics(self, target_col: str, y_test, y_pred, total_samples: int):
-        """Apskaičiuoja ir išsaugo test metrikos."""
-        # Apskaičiuojame bazines metrikos
+        """
+        Apskaičiuoja ir išsaugo test metrikos.
+
+        Skaičiuojamos metrikos:
+            - R²: Determinacijos koeficientas
+            - nRMSE: Normalizuota RMSE
+            - nMAE: Normalizuota MAE
+            - sMAPE: Simetrinė MAPE
+
+        Args:
+            target_col: Target stulpelio pavadinimas
+            y_test: Tikrosios test reikšmės
+            y_pred: Prognozuotos reikšmės
+            total_samples: Bendras pavyzdžių skaičius
+        """
         rmse = float(np.sqrt(mean_squared_error(y_test, y_pred)))
         mae = float(np.mean(np.abs(y_test.values - y_pred)))
         r2 = float(r2_score(y_test, y_pred))
         smape = self._calculate_smape(y_test.values, y_pred)
 
-        # Normalizuojame RMSE ir MAE pagal reikšmių diapazoną
         y_range = float(y_test.max() - y_test.min())
         if y_range > 0:
             nrmse = rmse / y_range
             nmae = mae / y_range
         else:
-            # Jei visos reikšmės vienodos, naudojame originalias metrikos
             nrmse = rmse
             nmae = mae
 
@@ -1482,9 +1678,16 @@ class XGBoostImputer:
     @staticmethod
     def _calculate_smape(y_true, y_pred):
         """
-        Symmetric MAPE [%].
+        Apskaičiuoja Symmetric MAPE [%].
 
         Veikia ir su 0 reikšmėmis, nes vardiklis niekada nebūna 0.
+
+        Args:
+            y_true: Tikrosios reikšmės
+            y_pred: Prognozuotos reikšmės
+
+        Returns:
+            float: sMAPE procentais
         """
         y_true = np.asarray(y_true, dtype=float)
         y_pred = np.asarray(y_pred, dtype=float)
@@ -1492,7 +1695,17 @@ class XGBoostImputer:
         return float(100.0 * np.mean(2.0 * np.abs(y_pred - y_true) / denominator))
 
     def _save_model(self, target_col, model, num_cols, cat_cols, num_imputer, encoder):
-        """Išsaugo modelį ir transformerius."""
+        """
+        Išsaugo modelį ir transformerius.
+
+        Args:
+            target_col: Target stulpelio pavadinimas
+            model: Ištreniruotas XGBRegressor
+            num_cols: Skaitinių stulpelių sąrašas
+            cat_cols: Kategorinių stulpelių sąrašas
+            num_imputer: Skaitinių stulpelių imputer
+            encoder: Kategorinių stulpelių encoder
+        """
         self.models[target_col] = {
             'model': model,
             'num_cols': num_cols,
@@ -1502,7 +1715,12 @@ class XGBoostImputer:
         }
 
     def _save_feature_importance(self, target_col: str):
-        """Išsaugo feature importance."""
+        """
+        Išsaugo feature importance.
+
+        Args:
+            target_col: Target stulpelio pavadinimas
+        """
         model_info = self.models[target_col]
         feature_names = (model_info['num_cols'] or []) + (model_info['cat_cols'] or [])
         importances = model_info['model'].feature_importances_
@@ -1513,7 +1731,7 @@ class XGBoostImputer:
             for i in range(k)
         }
 
-        # Rūšiuojame pagal reikšmę
+        # Rūšiuojame pagal svarbą (didėjimo tvarka)
         self.feature_importance[target_col] = dict(
             sorted(importance_dict.items(), key=lambda kv: kv[1], reverse=True)
         )

@@ -155,7 +155,7 @@ def siusti_treniravimo_pranesilma(
             <h2>Modelio Treniravimas Baigtas</h2>
 
             <div class="success">
-                <strong>{modelio_pavadinimas}</strong> modelis sekmingai istreniruotas!
+                <strong>{modelio_pavadinimas}</strong> modelis sekmingai ištreniruotas!
             </div>
 
             <h3>Treniravimo informacija</h3>
