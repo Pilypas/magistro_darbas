@@ -475,6 +475,41 @@
                         </div>
                     </div>
 
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">
+                                    Kryžminė validacija (CV Folds)
+                                </label>
+                                <select class="form-select" id="cvFolds">
+                                    <option value="2" selected>2 (greičiausias)</option>
+                                    <option value="3">3</option>
+                                    <option value="5">5 (rekomenduojamas)</option>
+                                    <option value="10">10 (tiksliausias)</option>
+                                </select>
+                                <div class="form-text">
+                                    Didesnis = tikslesnė metrikų įvertinimas, bet ilgiau užtrunka
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">
+                                    Post-processing (Empirical Bayes Shrinkage)
+                                </label>
+                                <div class="form-check form-switch mt-2">
+                                    <input class="form-check-input" type="checkbox" id="usePostProcessing" checked>
+                                    <label class="form-check-label" for="usePostProcessing">
+                                        Įjungtas
+                                    </label>
+                                </div>
+                                <div class="form-text">
+                                    Koreguoja ekstremalias prognozes link regiono vidurkio
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="row" id="learningRateRow" style="display: none;">
                         <div class="col-md-6">
                             <div class="mb-3">
@@ -493,7 +528,7 @@
                         <div class="col-12">
                             <div class="mb-3">
                                 <label class="form-label">
-                                    <i class="fas fa-columns"></i> Išmesti stulpelius iš imputacijos
+                                    Išmesti stulpelius iš imputacijos
                                 </label>
                                 <textarea class="form-control" id="excludeColumns" rows="3" placeholder="Pvz.: geo, year, id_column"></textarea>
                                 <div class="form-text">
@@ -510,6 +545,11 @@
                                     <h6>Numatoma trukmė:</h6>
                                     <p class="mb-0" id="estimatedDuration">
                                         Priklausomai nuo duomenų dydžio: 30s - 5min
+                                        <span id="renderWarning" style="display: none;">
+                                            <br><br>
+                                            <strong>Pastaba:</strong> Dėl render.com nepakankamų serverio išteklių, modelių apmokymas ir didelių duomenų rinkinių užpildymas gali užtrukti ilgiau arba sugeneruoti klaidą.
+                                            Tokiu atveju, rekomenduojama naudoti mažesnius duomenų rinkinius arba paleisti aplikaciją lokaliai.
+                                        </span>
                                     </p>
                                 </div>
                             </div>
@@ -537,6 +577,11 @@
 <script>
 let currentFilename = null;
 let currentStats = null;  // Store current file stats for modal
+
+// Rodyti render.com įspėjimą tik ant reapi.lt domeno
+if (window.location.hostname.includes('reapi.lt')) {
+    document.getElementById('renderWarning').style.display = 'inline';
+}
 
 // File upload handling
 const uploadArea = document.getElementById('uploadArea');
@@ -1510,6 +1555,8 @@ async function performImputation() {
     const maxDepth = maxDepthSelect === '' ? null : parseInt(maxDepthSelect);
     const learningRateInput = document.getElementById('learningRate').value;
     const learningRate = modelType === 'xgboost' && learningRateInput ? parseFloat(learningRateInput) : null;
+    const cvFolds = parseInt(document.getElementById('cvFolds').value);
+    const usePostProcessing = document.getElementById('usePostProcessing').checked;
 
     // Get excluded columns from text input (comma or space separated)
     const excludeColumnsInput = document.getElementById('excludeColumns');
@@ -1548,6 +1595,8 @@ async function performImputation() {
                 random_state: parseInt(randomState),
                 max_depth: maxDepth,
                 learning_rate: learningRate,
+                cv_folds: cvFolds,
+                use_post_processing: usePostProcessing,
                 exclude_columns: excludedColumns
             })
         });

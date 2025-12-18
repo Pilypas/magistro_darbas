@@ -846,12 +846,16 @@ class RandomForestImputer:
         # Naudojame ORIGINALIAS reikšmes features skaičiavimui
         df_features = self._df_original
 
-        # Žingsnis 1: Apskaičiuojame geo statistikas
-        geo_stats = self._compute_geo_stats(df_features, target_col)
-        self.geo_stats[target_col] = geo_stats
-
-        # Žingsnis 2: Pridedame geo statistikas kaip features
-        df_with_geo = self._add_geo_features(df_features, target_col, geo_stats)
+        # Žingsnis 1: Apskaičiuojame geo statistikas (tik jei post-processing įjungtas)
+        if self.use_post_processing:
+            geo_stats = self._compute_geo_stats(df_features, target_col)
+            self.geo_stats[target_col] = geo_stats
+            # Žingsnis 2: Pridedame geo statistikas kaip features
+            df_with_geo = self._add_geo_features(df_features, target_col, geo_stats)
+        else:
+            geo_stats = {}
+            self.geo_stats[target_col] = geo_stats
+            df_with_geo = df_features.copy()
 
         feature_cols = [c for c in df_with_geo.columns if c != target_col]
         known_mask = df_with_geo[target_col].notna()

@@ -249,6 +249,15 @@ def init_database_tables():
         except:
             pass  # Column already exists
 
+        # Add cv_folds column if it doesn't exist
+        try:
+            cursor.execute("""
+                ALTER TABLE imputacijos_rezultatai
+                ADD COLUMN cv_folds INT DEFAULT 2 AFTER learning_rate
+            """)
+        except:
+            pass  # Column already exists
+
         connection.commit()
         cursor.close()
         db_manager.close_connection()
@@ -265,12 +274,15 @@ class MLImputer:
     """Wrapper klasė, kuri pasirenka tinkamą modelį pagal model_type"""
 
     def __init__(self, model_type='random_forest', n_estimators=100, random_state=42,
-                 max_depth=None, learning_rate=None, exclude_columns=None):
+                 max_depth=None, learning_rate=None, cv_folds=2, use_post_processing=True,
+                 exclude_columns=None):
         self.model_type = model_type
         self.n_estimators = n_estimators
         self.random_state = random_state
         self.max_depth = max_depth
         self.learning_rate = learning_rate
+        self.cv_folds = cv_folds
+        self.use_post_processing = use_post_processing
         self.exclude_columns = exclude_columns or []
 
         # Inicijuojame tinkamą modelį
@@ -280,6 +292,8 @@ class MLImputer:
                 xgb_params = {
                     'n_estimators': n_estimators,
                     'random_state': random_state,
+                    'cv_folds': cv_folds,
+                    'use_post_processing': use_post_processing,
                     'exclude_columns': self.exclude_columns
                 }
                 if max_depth is not None:
@@ -293,6 +307,8 @@ class MLImputer:
                 rf_params = {
                     'n_estimators': n_estimators,
                     'random_state': random_state,
+                    'cv_folds': cv_folds,
+                    'use_post_processing': use_post_processing,
                     'exclude_columns': self.exclude_columns
                 }
                 if max_depth is not None:
@@ -307,6 +323,8 @@ class MLImputer:
             rf_params = {
                 'n_estimators': n_estimators,
                 'random_state': random_state,
+                'cv_folds': cv_folds,
+                'use_post_processing': use_post_processing,
                 'exclude_columns': self.exclude_columns
             }
             if max_depth is not None:
@@ -329,6 +347,10 @@ class MLImputer:
     def get_test_predictions(self):
         """Grąžina test predictions duomenis"""
         return self.imputer.get_test_predictions()
+
+    def get_cv_scores(self):
+        """Grąžina CV scores su standartiniais nuokrypiais"""
+        return self.imputer.get_cv_scores()
 
 @app.route('/')
 def index():
@@ -1995,7 +2017,7 @@ def get_csv_data(filename):
 
 def save_imputation_result(filename, imputed_filename, model_type, n_estimators, random_state,
                           original_missing, imputed_missing, plots, feature_importance, model_metrics,
-                          max_depth=None, learning_rate=None, test_predictions=None):
+                          max_depth=None, learning_rate=None, cv_folds=2, test_predictions=None):
     """Save imputation result to database"""
     if not MYSQL_ENABLED:
         return None
@@ -2011,14 +2033,14 @@ def save_imputation_result(filename, imputed_filename, model_type, n_estimators,
         cursor.execute("""
             INSERT INTO imputacijos_rezultatai (
                 rezultato_id, originalus_failas, imputuotas_failas,
-                modelio_tipas, n_estimators, random_state, max_depth, learning_rate,
+                modelio_tipas, n_estimators, random_state, max_depth, learning_rate, cv_folds,
                 originalus_trukstamu_kiekis, imputuotas_trukstamu_kiekis,
                 apdorotu_stulpeliu_kiekis, modelio_metrikos,
                 pozymiu_svarba, grafikai, test_predictions, busena
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """, (
             result_id, filename, imputed_filename, model_type,
-            n_estimators, random_state, max_depth, learning_rate,
+            n_estimators, random_state, max_depth, learning_rate, cv_folds,
             original_missing, imputed_missing,
             len(feature_importance) if feature_importance else 0,
             json_module.dumps(model_metrics) if model_metrics else None,
@@ -2065,9 +2087,11 @@ def impute_missing_values(filename):
         random_state = data.get('random_state', 42)
         max_depth = data.get('max_depth', None)  # None = automatic
         learning_rate = data.get('learning_rate', None)  # For XGBoost only
+        cv_folds = data.get('cv_folds', 2)  # Cross-validation folds
+        use_post_processing = data.get('use_post_processing', True)  # Empirical Bayes Shrinkage
         exclude_columns = data.get('exclude_columns', [])  # Columns to exclude from imputation
 
-        print(f"Model type: {model_type}, n_estimators: {n_estimators}")
+        print(f"Model type: {model_type}, n_estimators: {n_estimators}, cv_folds: {cv_folds}, post_processing: {use_post_processing}")
         if exclude_columns:
             print(f"Excluded columns ({len(exclude_columns)}): {exclude_columns}")
 
@@ -2079,6 +2103,8 @@ def impute_missing_values(filename):
             random_state=random_state,
             max_depth=max_depth,
             learning_rate=learning_rate,
+            cv_folds=cv_folds,
+            use_post_processing=use_post_processing,
             exclude_columns=exclude_columns
         )
         df_imputed = imputer.fit_transform(df)
@@ -2183,8 +2209,9 @@ def impute_missing_values(filename):
         # Generate model performance plots
         print("Generating model performance plots...")
         model_metrics = imputer.get_model_metrics()
+        cv_scores = imputer.get_cv_scores()
 
-        # Add per-column missing data information to metrics
+        # Add per-column missing data information and CV std values to metrics
         if model_metrics:
             missing_original = df.isnull().sum()
             total_rows = len(df)
@@ -2198,6 +2225,15 @@ def impute_missing_values(filename):
                     model_metrics[column_name]['missing_count'] = missing_count
                     model_metrics[column_name]['missing_percentage'] = missing_percentage
                     model_metrics[column_name]['total_rows'] = total_rows
+
+                # Add CV std values from cv_scores
+                if cv_scores and column_name in cv_scores:
+                    cv_data = cv_scores[column_name]
+                    model_metrics[column_name]['r2_std'] = cv_data.get('r2_std', 0)
+                    model_metrics[column_name]['nrmse_std'] = cv_data.get('nrmse_std', 0)
+                    model_metrics[column_name]['nmae_std'] = cv_data.get('nmae_std', 0)
+                    model_metrics[column_name]['smape_std'] = cv_data.get('smape_std', 0)
+                    model_metrics[column_name]['cv_folds'] = cv_data.get('cv_folds', cv_folds)
 
         performance_plots = generate_model_performance_plots(model_metrics)
         plots.update(performance_plots)
@@ -2236,7 +2272,7 @@ def impute_missing_values(filename):
                     filename, imputed_filename, model_type, n_estimators, random_state,
                     int(original_missing), int(df_imputed.isnull().sum().sum()),
                     plots, feature_importance, model_metrics,
-                    max_depth, learning_rate, test_predictions_serializable
+                    max_depth, learning_rate, cv_folds, test_predictions_serializable
                 )
                 if result_id:
                     print(f"Results saved with ID: {result_id}")
@@ -2677,8 +2713,15 @@ def generate_scatter_plots(test_predictions, model_type):
         y_true = data['y_true']
         y_pred = data['y_pred']
         r2 = data['r2']
-        mae = data.get('mae', np.mean(np.abs(y_true - y_pred)))
-        rmse = data.get('rmse', np.sqrt(np.mean((y_true - y_pred)**2)))
+
+        # Naudojame normalizuotas metrikas (nMAE ir nRMSE)
+        # Jei nėra - apskaičiuojame normalizuodami pagal y_true range
+        y_range = float(np.max(y_true) - np.min(y_true))
+        if y_range < 1e-10:
+            y_range = 1.0  # Apsauga nuo dalybos iš nulio
+
+        nmae = data.get('nmae', np.mean(np.abs(y_true - y_pred)) / y_range)
+        nrmse = data.get('nrmse', np.sqrt(np.mean((y_true - y_pred)**2)) / y_range)
 
         # Scatter plot
         ax.scatter(y_true, y_pred, alpha=0.6, edgecolors='k', s=60, color=plot_color)
@@ -2695,8 +2738,8 @@ def generate_scatter_plots(test_predictions, model_type):
         ax.legend(loc='upper left', fontsize=9)
         ax.grid(True, alpha=0.3, linestyle='--')
 
-        # Add metrics text
-        ax.text(0.025, 0.88, f'MAE: {mae:.2f}\nRMSE: {rmse:.2f}',
+        # Add metrics text (normalizuotos reikšmės)
+        ax.text(0.025, 0.88, f'nMAE: {nmae:.4f}\nnRMSE: {nrmse:.4f}',
                 transform=ax.transAxes, fontsize=9, verticalalignment='top',
                 bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
 
