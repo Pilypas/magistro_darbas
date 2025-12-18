@@ -26,5 +26,8 @@ uploads/*.csv
 # Logs
 *.log
 
+#Magistro darbas
+Magistro_darbas.pdf
+
 #Additionally
 .claude/
