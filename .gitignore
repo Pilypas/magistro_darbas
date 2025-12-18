@@ -25,6 +25,3 @@ uploads/*.csv
 
 # Logs
 *.log
-
-#Additionally
-.claude/
