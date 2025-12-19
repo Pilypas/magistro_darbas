@@ -33,9 +33,6 @@ KODO STRUKTŪRA:
    3.8. Feature transformacijos
    3.9. Galutinė imputacija su post-processing
    3.10. Metrikų skaičiavimas ir saugojimas
-
-Autorius: Magistro darbas
-Versija: 2.0 (Clean Code)
 ================================================================================
 """
 
