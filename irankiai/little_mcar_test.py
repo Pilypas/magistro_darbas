@@ -10,7 +10,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import missingno as msno
 from matplotlib.patches import Patch
-from scipy.stats import chi2
+from scipy.stats import chi2 # https://medium.com/@itk48/missing-data-imputation-with-chi-square-tests-mcar-mar-3278956387c8
 
 # ======================================================================
 # 1. Missingness Matrix (su geo ir year)
@@ -124,17 +124,17 @@ def little_mcar_test(X):
 
 
 # ======================================================================
-# 3. Gražus MCAR rezultatų išvedimas
+# 3. MCAR rezultatų išvedimas
 # ======================================================================
 
 def print_little_mcar_results(X):
     """
-    Atlieka MCAR testą ir gražiai išspausdina rezultatus.
+    Atliekame MCAR testą ir išspausdiname rezultatus.
     """
     chi2_val, df_val, p_val = little_mcar_test(X)
 
     print("\n===================== LITTLE MCAR TESTO REZULTATAI =====================")
-    print(f"Chi-square statistika: {chi2_val:.3f}")
+    print(f"Chi-kvadrato statistika (angl. chi-square statistic) : {chi2_val:.3f}")
     print(f"Laisvės laipsniai:     {df_val}")
     print(f"P-vertė:               {p_val:.3f}")
 

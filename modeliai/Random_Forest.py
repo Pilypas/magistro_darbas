@@ -423,18 +423,17 @@ class RandomForestImputer:
             print(f"  - CV folds optimizavimui: {self.hyperopt_cv}")
 
         if self.use_post_processing:
-            print("\nPATOBULINTAS (v4) Hibridinis post-processing IJUNGTAS:")
-            print("  1. MINIMALUS Shrinkage (tik ekstremaliems atvejams)")
-            print(f"     - Bazinis k: {self.shrinkage_k} * 1.5 = {self.shrinkage_k * 1.5} std")
-            print("     - max_shrinkage: 5-10% (islaiko 90-95% RF info)")
-            print("     - sigmoid_steepness = 0.4 (labai svelnus perejimas)")
-            print("     - Papildomas ribojimas: shrinkage max 10% bet kokiu atveju")
-            print("  2. YEAR-BASED VARIATION")
-            print("     - Bazinis jitter: 8-15% nuo geo_std")
-            print("     - Year offset: 2% nuo std per metus (sisteminis)")
-            print("     - Deterministinis seed: geo + year + target_col")
-            print("  3. Ribos (safety net)")
-            print("     - [min*0.3, max*2.0] arba [year_specific_mean +/- 4*std]")
+            print("\nEMPIRICAL BAYES SHRINKAGE POST-PROCESSING IJUNGTAS:")
+            print("  Formules:")
+            print("    (23) y_EB = (1 - lambda) * y_ML + lambda * y_region")
+            print("    (24) lambda = sigma2_ML / (sigma2_ML + sigma2_region)")
+            print("  Kur:")
+            print("    - y_ML: RF modelio prognoze (medziu vidurkis)")
+            print("    - y_region: regiono istorinis vidurkis (su trend korekcija)")
+            print("    - sigma2_ML: RF medziu prognoziu dispersija")
+            print("    - sigma2_region: regiono istoriniu duomenu dispersija")
+            print("  Safety bounds:")
+            print("    - Ribos ekstremaliu atveju apsaugai")
 
     def print_best_params(self):
         """
@@ -572,18 +571,23 @@ class RandomForestImputer:
 
     def get_shrinkage_report(self):
         """
-        Grąžina ataskaitą apie pritaikytą hibridinį post-processing.
+        Grąžina ataskaitą apie pritaikytą Empirical Bayes Shrinkage.
 
         NAUDOJAMA: Jupyter Notebook
 
         Returns:
             dict: Informacija apie koreguotas prognozes pagal rodiklius
+                  Su σ²_ML, σ²_region, λ reikšmėmis kiekvienai prognozei
         """
         return self.shrinkage_applied
 
     def print_shrinkage_summary(self):
         """
-        Spausdina suvestinę apie hibridinį post-processing.
+        Spausdina suvestinę apie Empirical Bayes Shrinkage post-processing.
+
+        Rodo formules (23) ir (24) taikymo rezultatus:
+        - Formulė (23): ŷ_EB = (1 - λ) × ŷ_ML + λ × ȳ_region
+        - Formulė (24): λ = σ²_ML / (σ²_ML + σ²_region)
 
         NAUDOJAMA: Jupyter Notebook
         """
@@ -591,46 +595,61 @@ class RandomForestImputer:
             print("Post-processing nebuvo pritaikytas arba nebuvo reikalingas.")
             return
 
-        print("=" * 80)
-        print("HIBRIDINIS POST-PROCESSING SUVESTINE")
-        print("(Empirical Bayes Shrinkage + Ribos)")
-        print("=" * 80)
+        print("=" * 90)
+        print("EMPIRICAL BAYES SHRINKAGE SUVESTINE")
+        print("Formule (23): y_EB = (1 - lambda) * y_ML + lambda * y_region")
+        print("Formule (24): lambda = sigma2_ML / (sigma2_ML + sigma2_region)")
+        print("=" * 90)
 
         total_adjustments = 0
-        shrinkage_count = 0
-        bounds_count = 0
+        bounds_applied_count = 0
+        all_lambdas = []
 
         for target_col, adjustments in self.shrinkage_applied.items():
             if adjustments:
                 total_adjustments += len(adjustments)
-                col_shrinkage = sum(1 for a in adjustments if a.get('method') == 'shrinkage')
-                col_bounds = sum(1 for a in adjustments if a.get('method') == 'bounds')
-                shrinkage_count += col_shrinkage
-                bounds_count += col_bounds
+                col_bounds = sum(1 for a in adjustments if a.get('bounds_applied', False))
+                bounds_applied_count += col_bounds
+
+                # Lambda statistikos šiam rodikliui
+                lambdas = [a.get('lambda', 0) for a in adjustments]
+                all_lambdas.extend(lambdas)
 
                 print(f"\n{target_col}:")
-                print(f"  Koreguotu prognoziu: {len(adjustments)}")
-                print(f"    - Empirical Bayes Shrinkage: {col_shrinkage}")
-                print(f"    - Ribos (safety): {col_bounds}")
+                print(f"  Imputuotu reiksmiu: {len(adjustments)}")
+                print(f"  Lambda (shrinkage koef.) statistika:")
+                print(f"    - Vidurkis: {np.mean(lambdas):.4f} ({np.mean(lambdas)*100:.2f}%)")
+                print(f"    - Min:      {np.min(lambdas):.4f} ({np.min(lambdas)*100:.2f}%)")
+                print(f"    - Max:      {np.max(lambdas):.4f} ({np.max(lambdas)*100:.2f}%)")
+                print(f"  Ribos pritaikytos: {col_bounds} atvejams")
 
                 # Rodome kelis pavyzdžius
-                examples = adjustments[:5]
+                examples = adjustments[:3]
                 if examples:
                     print("  Pavyzdziai:")
                     for adj in examples:
                         geo = adj.get('geo', '?')
                         year = adj.get('year', '?')
-                        orig = adj.get('original_pred', 0)
-                        final = adj.get('adjusted_pred', 0)
-                        method = adj.get('method', '?')
-                        shrink_w = adj.get('shrinkage_weight', 0)
-                        print(f"    {geo} ({year}): {orig:.2f} -> {final:.2f} "
-                              f"[{method}, w={shrink_w:.2f}]")
+                        y_ml = adj.get('y_ML', 0)
+                        y_eb = adj.get('y_EB', 0)
+                        final = adj.get('final_pred', 0)
+                        lam = adj.get('lambda', 0)
+                        s2_ml = adj.get('sigma2_ML', 0)
+                        s2_reg = adj.get('sigma2_region', 0)
+                        y_reg = adj.get('year_specific_mean', 0)
+                        print(f"    {geo} ({year}):")
+                        print(f"      y_ML={y_ml:.2f}, y_region={y_reg:.2f}")
+                        print(f"      sigma2_ML={s2_ml:.2f}, sigma2_region={s2_reg:.2f}")
+                        print(f"      lambda={lam:.4f} -> y_EB={y_eb:.2f} -> final={final:.2f}")
 
-        print(f"\nViso koreguotu prognoziu: {total_adjustments}")
-        print(f"  - Empirical Bayes Shrinkage: {shrinkage_count}")
-        print(f"  - Ribos: {bounds_count}")
-        print("=" * 80)
+        print(f"\n" + "-" * 90)
+        print(f"BENDRA STATISTIKA:")
+        print(f"  Viso imputuotu reiksmiu: {total_adjustments}")
+        print(f"  Ribos pritaikytos: {bounds_applied_count} atvejams")
+        if all_lambdas:
+            print(f"  Lambda vidurkis (visi rodikliai): {np.mean(all_lambdas):.4f} ({np.mean(all_lambdas)*100:.2f}%)")
+            print(f"  Lambda std:                       {np.std(all_lambdas):.4f}")
+        print("=" * 90)
 
     # ==========================================================================
     # 3.3. DUOMENŲ PARUOŠIMAS (PRIVATE)
@@ -1391,11 +1410,12 @@ class RandomForestImputer:
         target_col: str, feature_cols: list, geo_stats: dict
     ):
         """
-        Atlieka galutinę imputaciją SU HIBRIDINIU post-processing.
+        Atlieka galutinę imputaciją SU EMPIRICAL BAYES SHRINKAGE post-processing.
 
-        Hibridinis post-processing:
-            1. Empirical Bayes Shrinkage (minkštas koregavimas)
-            2. Ribos (safety net)
+        Empirical Bayes Shrinkage:
+            1. Apskaičiuoja σ²_ML iš individualių RF medžių prognozių
+            2. Taiko formulę (24): λ = σ²_ML / (σ²_ML + σ²_region)
+            3. Taiko formulę (23): ŷ_EB = (1 - λ) × ŷ_ML + λ × ȳ_region
 
         SVARBU: 0 reikšmės NĖRA imputuojamos - jos lieka 0.
 
@@ -1422,76 +1442,85 @@ class RandomForestImputer:
             model_info['encoder']
         )
 
-        # RF predikcija
+        # RF predikcija (vidurkis iš visų medžių)
         predictions = model_info['model'].predict(X_missing)
 
-        # Hibridinis post-processing
+        # Gauname individualių medžių prognozes σ²_ML skaičiavimui
+        tree_predictions = self._get_individual_tree_predictions(
+            model_info['model'], X_missing
+        )
+
+        # Empirical Bayes Shrinkage post-processing
         if 'geo' in df.columns and geo_stats:
             geo_values = df.loc[missing_mask, 'geo'].values
             year_values = df.loc[missing_mask, 'year'].values if 'year' in df.columns else None
 
-            adjusted_predictions = self._apply_hybrid_post_processing(
-                predictions, geo_values, year_values, geo_stats, target_col
+            adjusted_predictions = self._apply_empirical_bayes_shrinkage(
+                predictions, tree_predictions, geo_values, year_values, geo_stats, target_col
             )
             df.loc[missing_mask, target_col] = adjusted_predictions
         else:
             df.loc[missing_mask, target_col] = predictions
 
-    def _apply_hybrid_post_processing(
-        self, predictions: np.ndarray, geo_values: np.ndarray,
-        year_values: np.ndarray, geo_stats: dict, target_col: str
-    ) -> np.ndarray:
+    def _get_individual_tree_predictions(self, model, X: np.ndarray) -> np.ndarray:
         """
-        Hibridinis post-processing: MINIMALUS Shrinkage + Year-based Variation.
+        Gauna individualių RF medžių prognozes.
 
-        Algoritmas:
-            1. RF prognozė išlaikoma beveik nepakeista (95%+ išlaikoma)
-            2. Shrinkage taikomas TIK kai nuokrypis > 4sigma nuo year_specific_mean
-            3. Year-based jitter užtikrina unikalias reikšmes skirtingiems metams
-            4. Ribos kaip safety net
+        Naudojama σ²_ML (modelio prognozių dispersijos) skaičiavimui
+        pagal Empirical Bayes Shrinkage formulę (24).
 
         Args:
-            predictions: RF prognozės
+            model: Ištreniruotas RandomForestRegressor
+            X: Transformuota feature matrica (numpy array)
+
+        Returns:
+            np.ndarray: Medžių prognozės, shape (n_trees, n_samples)
+        """
+        n_trees = len(model.estimators_)
+        n_samples = X.shape[0]
+
+        tree_predictions = np.zeros((n_trees, n_samples))
+
+        for i, tree in enumerate(model.estimators_):
+            tree_predictions[i, :] = tree.predict(X)
+
+        return tree_predictions
+
+    def _apply_empirical_bayes_shrinkage(
+        self, predictions: np.ndarray, tree_predictions: np.ndarray,
+        geo_values: np.ndarray, year_values: np.ndarray,
+        geo_stats: dict, target_col: str
+    ) -> np.ndarray:
+        """
+        Empirical Bayes Shrinkage pagal formules (23) ir (24).
+
+        Formulė (23): ŷ_EB = (1 - λ) × ŷ_ML + λ × ȳ_region
+        Formulė (24): λ = σ²_ML / (σ²_ML + σ²_region)
+
+        Kur:
+            - ŷ_ML: RF modelio prognozė (medžių vidurkis)
+            - ȳ_region: regiono istorinis vidurkis (su trend korekcija)
+            - σ²_ML: RF medžių prognozių dispersija
+            - σ²_region: regiono istorinių duomenų dispersija
+
+        Args:
+            predictions: RF prognozės (vidurkis iš medžių)
+            tree_predictions: Individualių medžių prognozės, shape (n_trees, n_samples)
             geo_values: Regionų reikšmės
             year_values: Metų reikšmės (arba None)
             geo_stats: Geo statistikos
             target_col: Target stulpelio pavadinimas
 
         Returns:
-            np.ndarray: Koreguotos prognozės
+            np.ndarray: Koreguotos prognozės pagal Empirical Bayes Shrinkage
         """
         adjusted = predictions.copy()
         shrinkage_info = []
 
-        # Post-processing parametrai
-        base_max_shrinkage = 0.10
-        sigmoid_steepness = 0.4
-        base_shrinkage_k = self.shrinkage_k * 1.5
-
-        # Globalus CV (coefficient of variation)
-        all_means = [s.get('mean', 0) for s in geo_stats.values() if s.get('mean', 0) != 0]
-        all_stds = [s.get('std', 0) for s in geo_stats.values()]
-        if all_means and all_stds:
-            global_mean = np.mean([abs(m) for m in all_means])
-            global_std = np.mean(all_stds)
-            global_cv = global_std / global_mean if global_mean > 0 else 0
-        else:
-            global_cv = 0
-
-        # Mean year
+        # Mean year skaičiavimui
         mean_year = 2012
         if year_values is not None and len(year_values) > 0:
             mean_year = int(np.median(year_values))
-
-        # Adaptyvus shrinkage pagal CV
-        if global_cv > 1.0:
-            base_max_shrinkage = 0.05
-            k_adaptive = base_shrinkage_k * 2.0
-        elif global_cv > 0.5:
-            base_max_shrinkage = 0.08
-            k_adaptive = base_shrinkage_k * 1.5
-        else:
-            k_adaptive = base_shrinkage_k
 
         for i, (pred, geo) in enumerate(zip(predictions, geo_values)):
             stats = geo_stats.get(geo, {})
@@ -1499,103 +1528,73 @@ class RandomForestImputer:
             if not stats:
                 continue
 
+            # Regiono statistikos
             geo_mean = stats.get('mean', pred)
             geo_max = stats.get('max', pred)
             geo_min = stats.get('min', pred)
             geo_std = stats.get('std', 0)
             geo_trend = stats.get('trend', 0)
 
-            if geo_std < 1e-10:
-                geo_std = abs(geo_mean) * 0.1 if geo_mean != 0 else 1.0
+            # σ²_region - regiono istorinių duomenų dispersija
+            sigma2_region = geo_std ** 2 if geo_std > 0 else 1.0
 
-            # Year-specific target mean
-            year_specific_mean = geo_mean
+            # σ²_ML - RF medžių prognozių dispersija šiam stebėjimui
+            # Skaičiuojama iš individualių medžių prognozių
+            sigma2_ML = float(np.var(tree_predictions[:, i], ddof=1))
+
+            # Apsauga nuo per mažos dispersijos
+            if sigma2_ML < 1e-10:
+                sigma2_ML = sigma2_region * 0.01  # Minimalus 1% nuo regiono dispersijos
+
+            # ========================================
+            # FORMULĖ (24): λ = σ²_ML / (σ²_ML + σ²_region)
+            # ========================================
+            lambda_shrinkage = sigma2_ML / (sigma2_ML + sigma2_region)
+
+            # Year-specific vidurkis (ȳ_region su trend korekcija)
             year = year_values[i] if year_values is not None else mean_year
+            year_specific_mean = geo_mean
             if geo_trend != 0:
                 year_diff = year - mean_year
                 trend_adjustment = geo_trend * year_diff
                 year_specific_mean = geo_mean + trend_adjustment
 
-            deviation = abs(pred - year_specific_mean)
-            deviation_in_std = deviation / geo_std
+            # ========================================
+            # FORMULĖ (23): ŷ_EB = (1 - λ) × ŷ_ML + λ × ȳ_region
+            # ========================================
+            y_eb = (1 - lambda_shrinkage) * pred + lambda_shrinkage * year_specific_mean
 
+            # Safety bounds (ribos ekstremalių atvejų apsaugai)
             allows_negative = geo_min < 0
-
-            # Adaptyvus max_shrinkage
-            max_shrinkage_final = base_max_shrinkage
-            trend_strength = abs(geo_trend) / geo_std if geo_std > 0 else 0
-            if trend_strength > 0.05:
-                max_shrinkage_final *= max(0.3, 1.0 - trend_strength * 2)
-
-            # Bounds
             if allows_negative:
-                if geo_std > 0:
-                    lower_bound = max(geo_min * 1.1, year_specific_mean - 3 * geo_std)
-                    upper_bound = min(geo_max * 1.1, year_specific_mean + 3 * geo_std)
-                else:
-                    lower_bound = geo_min * 1.1
-                    upper_bound = geo_max * 1.1
+                lower_bound = geo_min * 1.2 if geo_min < 0 else geo_min * 0.8
+                upper_bound = geo_max * 1.2
             else:
-                if geo_std > 0:
-                    lower_bound = max(0, max(geo_min * 0.8, year_specific_mean - 3 * geo_std))
-                    upper_bound = min(geo_max * 1.1, year_specific_mean + 3 * geo_std)
-                else:
-                    lower_bound = max(0, geo_min * 0.8)
-                    upper_bound = geo_max * 1.1
+                lower_bound = max(0, geo_min * 0.5)
+                upper_bound = geo_max * 1.5
 
-            # Shrinkage
-            sigmoid_input = (deviation_in_std - k_adaptive) * sigmoid_steepness
-            w = max_shrinkage_final / (1 + np.exp(-sigmoid_input))
-            w = min(w, 0.10)
-
-            adjusted_pred = w * year_specific_mean + (1 - w) * pred
-
-            # Smart bounds su year-based variacija
-            if year_values is not None:
-                year = year_values[i]
-
-                seed = hash(f"{geo}_{year}_{target_col}_v6") % 100000
-                np.random.seed(seed)
-
-                jitter_pct = 0.03 + (year - 2000) * 0.002
-                jitter_base = geo_std * min(jitter_pct, 0.08)
-                year_offset = (year - mean_year) * geo_std * 0.015
-                random_jitter = np.random.normal(0, jitter_base)
-
-                if adjusted_pred > upper_bound:
-                    overshoot_ratio = min((adjusted_pred - upper_bound) / (geo_std + 1e-9), 3.0)
-                    interp_factor = min(0.5 + 0.15 * overshoot_ratio, 0.92)
-                    base_value = year_specific_mean + interp_factor * (upper_bound - year_specific_mean)
-                    final_pred = min(base_value + year_offset + random_jitter, upper_bound)
-                elif adjusted_pred < lower_bound:
-                    undershoot_ratio = min((lower_bound - adjusted_pred) / (geo_std + 1e-9), 3.0)
-                    interp_factor = min(0.5 + 0.15 * undershoot_ratio, 0.92)
-                    base_value = year_specific_mean - interp_factor * (year_specific_mean - lower_bound)
-                    final_pred = max(base_value + year_offset + random_jitter, lower_bound)
-                else:
-                    final_pred = np.clip(adjusted_pred + year_offset + random_jitter, lower_bound, upper_bound)
-            else:
-                final_pred = np.clip(adjusted_pred, lower_bound, upper_bound)
-
-            # Metodas ataskaitai
-            if w > 0.005:
-                method = 'bounds' if final_pred != adjusted_pred else 'shrinkage'
-            elif final_pred != pred:
-                method = 'bounds'
-            else:
-                method = 'none'
+            # Pritaikome ribas
+            final_pred = np.clip(y_eb, lower_bound, upper_bound)
 
             adjusted[i] = final_pred
 
-            if method != 'none':
-                shrinkage_info.append({
-                    'geo': geo, 'year': year,
-                    'original_pred': pred, 'shrinkage_pred': adjusted_pred, 'adjusted_pred': final_pred,
-                    'bounds': (lower_bound, upper_bound),
-                    'geo_mean': geo_mean, 'year_specific_mean': year_specific_mean,
-                    'geo_std': geo_std, 'deviation_std': deviation_in_std,
-                    'shrinkage_weight': w, 'trend': geo_trend, 'method': method
-                })
+            # Išsaugome informaciją ataskaitai
+            shrinkage_info.append({
+                'geo': geo,
+                'year': year,
+                'y_ML': pred,
+                'y_EB': y_eb,
+                'final_pred': final_pred,
+                'y_region_mean': geo_mean,
+                'year_specific_mean': year_specific_mean,
+                'sigma2_ML': sigma2_ML,
+                'sigma2_region': sigma2_region,
+                'lambda': lambda_shrinkage,
+                'geo_std': geo_std,
+                'trend': geo_trend,
+                'bounds': (lower_bound, upper_bound),
+                'bounds_applied': final_pred != y_eb
+            })
 
         if shrinkage_info:
             self.shrinkage_applied[target_col] = shrinkage_info

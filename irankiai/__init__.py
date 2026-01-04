@@ -3,6 +3,6 @@
 ===============================
 """
 
-from .siusti import siusti_treniravimo_pranesilma
+from .siusti import siusti_treniravimo_pranesima
 
-__all__ = ['siusti_treniravimo_pranesilma']
+__all__ = ['siusti_treniravimo_pranesima']

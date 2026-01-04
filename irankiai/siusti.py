@@ -61,7 +61,7 @@ def format_duration(seconds):
         return f"{hours} val. {minutes} min. {secs} sek."
 
 
-def siusti_treniravimo_pranesilma(
+def siusti_treniravimo_pranesima(
     modelio_pavadinimas: str,
     treniravimo_trukme: float,
     gavejo_email: str = "irmantas.pilypas@sa.stud.vu.lt",
@@ -155,7 +155,7 @@ def siusti_treniravimo_pranesilma(
             <h2>Modelio Treniravimas Baigtas</h2>
 
             <div class="success">
-                <strong>{modelio_pavadinimas}</strong> modelis sekmingai ištreniruotas!
+                <strong>{modelio_pavadinimas}</strong> modelio treniravimas sėkmingai baigtas!
             </div>
 
             <h3>Treniravimo informacija</h3>
@@ -165,11 +165,11 @@ def siusti_treniravimo_pranesilma(
                     <td>{modelio_pavadinimas}</td>
                 </tr>
                 <tr>
-                    <td><strong>Treniravimo trukme:</strong></td>
+                    <td><strong>Treniravimo trukmė:</strong></td>
                     <td>{trukme_formatuota}</td>
                 </tr>
                 <tr>
-                    <td><strong>Pradzios laikas:</strong></td>
+                    <td><strong>Pradžios laikas:</strong></td>
                     <td>{pradzios_laikas.strftime('%Y-%m-%d %H:%M:%S')}</td>
                 </tr>
                 <tr>
@@ -181,7 +181,7 @@ def siusti_treniravimo_pranesilma(
             {papildoma_html}
 
             <div class="footer">
-                <p>Sis el. laiskas buvo sugeneruotas automatiskai.</p>
+                <p>Šis el. laiškas buvo sugeneruotas automatiškai.</p>
                 <p>Ekonominiu Rodikliu Imputacijos Tyrimas - Magistro darbas VU ŠA</p>
             </div>
         </body>
@@ -224,7 +224,7 @@ if __name__ == "__main__":
     # Testuojame el. pašto siuntimą
     print("Testuojamas el. pašto siuntimas...")
 
-    success, message = siusti_treniravimo_pranesilma(
+    success, message = siusti_treniravimo_pranesima(
         modelio_pavadinimas="Random Forest (TEST)",
         treniravimo_trukme=125.5,  # 2 minutės 5.5 sekundės
         papildoma_info={
