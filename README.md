@@ -79,7 +79,7 @@ SMTP_FROM_NAME=Duomenų Analizės Sistema
 
 ### 3. Aplikacijos paleidimas
 
-**Flask aplikacijos paleidimas lokalioje komapiuterio aplinkoje:**
+**Flask aplikacijos paleidimas lokalioje kompiuterio aplinkoje:**
 ```bash
 python app.py
 ```

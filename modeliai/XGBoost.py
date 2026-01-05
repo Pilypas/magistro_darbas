@@ -9,7 +9,7 @@ NAUDOJIMAS:
 - Flask aplikacija: fit_and_impute(), get_model_metrics(), get_feature_importance()
 - Jupyter Notebook: visi metodai + print_*() funkcijos analizei ir vizualizacijai
 
-PAGRINDINĖS TAISYKLĖS:
+PAGRINDINĖS TAISYKLĖS, KURIAS TURI KODAS:
 ----------------------
 1. Struktūriniai nuliai (0) NIEKADA NEIMPUTUOJAMI - imputuojamos tik NaN reikšmės
 2. 0 reikšmės naudojamos kaip TRAIN duomenys (reali informacija), bet NE kaip TEST
@@ -54,7 +54,7 @@ try:
     import xgboost as xgb
 except ImportError as e:
     raise ImportError(
-        "XGBoost biblioteka neįdiegta. Įdiekite: pip install xgboost"
+        "XGBoost biblioteka neįdiegta. Įdiekite: pip install xgboost, Galima naudoti: pip install xgboost==1.7.5 VS CODE aplinkoje"
     ) from e
 
 
@@ -182,7 +182,7 @@ class XGBoostImputer:
         hyperopt_n_iter=30,
         hyperopt_cv=3,
         use_post_processing=True,
-        shrinkage_k=3.0
+        shrinkage_k=3.0 # Adaptyvus k pagal imties dydį, kol kas palieku eksperimentams 2026-01-04
     ):
         """
         Inicializuoja XGBoost imputerį.
@@ -432,12 +432,12 @@ class XGBoostImputer:
             print(f"  - {name}: {value}")
 
         if self.use_hyperopt:
-            print("\nHiperparametru optimizavimas IJUNGTAS")
+            print("\nHiperparametru optimizavimas ĮJUNGTAS")
             print(f"  - Iteraciju skaicius: {self.hyperopt_n_iter}")
             print(f"  - CV folds optimizavimui: {self.hyperopt_cv}")
 
         if self.use_post_processing:
-            print("\nPATOBULINTAS (v4) Hibridinis post-processing IJUNGTAS:")
+            print("\nPATOBULINTAS (v4) Hibridinis post-processing ĮJUNGTAS:")
             print("  1. MINIMALUS Shrinkage (tik ekstremaliems atvejams)")
             print(f"     - Bazinis k: {self.shrinkage_k} * 1.5 = {self.shrinkage_k * 1.5} std")
             print("     - max_shrinkage: 5-10% (islaiko 90-95% XGB info)")
@@ -634,7 +634,7 @@ class XGBoostImputer:
                         print(f"    {geo} ({year}): {orig:.2f} -> {final:.2f} "
                               f"[{method}, w={shrink_w:.2f}]")
 
-        print(f"\nViso koreguotu prognoziu: {total_adjustments}")
+        print(f"\nViso koreguotų prognozių: {total_adjustments}")
         print(f"  - Empirical Bayes Shrinkage: {shrinkage_count}")
         print(f"  - Ribos: {bounds_count}")
         print("=" * 80)
@@ -764,7 +764,7 @@ class XGBoostImputer:
             geo_min = float(valid_data.min())
             geo_std = float(valid_data.std()) if len(valid_data) > 1 else 0.0
 
-            # Trend: linijinės regresijos koeficientas (year vs value)
+            # Trend: linijinės regresijos koeficientas (year ir value)
             geo_trend = 0.0
             if 'year' in df.columns:
                 geo_df = df[(df['geo'] == geo_val) & (df[target_col].notna()) & (df[target_col] != 0)]
@@ -1563,7 +1563,7 @@ class XGBoostImputer:
                     lower_bound = max(0, geo_min * 0.8)
                     upper_bound = geo_max * 1.1
 
-            # Shrinkage
+            # Shrinkage pagal patobulintą formulę 2025-12-22 (Kol kas eksperimentinė)
             sigmoid_input = (deviation_in_std - k_adaptive) * sigmoid_steepness
             w = max_shrinkage_final / (1 + np.exp(-sigmoid_input))
             w = min(w, 0.10)

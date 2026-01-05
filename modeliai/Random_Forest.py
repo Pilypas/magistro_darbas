@@ -9,14 +9,14 @@ NAUDOJIMAS:
 - Flask aplikacija: fit_and_impute(), get_model_metrics(), get_feature_importance()
 - Jupyter Notebook: visi metodai + print_*() funkcijos analizei ir vizualizacijai
 
-PAGRINDINĖS TAISYKLĖS:
+PAGRINDINĖS TAISYKLĖS, KURIAS TURI KODAS:
 ----------------------
-1. Struktūriniai nuliai (0) NIEKADA NEIMPUTUOJAMI - imputuojamos tik NaN reikšmės
-2. 0 reikšmės naudojamos kaip TRAIN duomenys (reali informacija), bet NE kaip TEST
-3. Kategoriniai prediktoriai ('geo', 'year') BE trūkumų - tik enkoduojami
-4. Synthetic test be leakage (20% TEST be 0 reikšmių)
-5. Prediktorių imputacija (mean) ignoruoja 0 reikšmes
-6. Naudojama SMAPE metrika (veikia su 0 reikšmėmis)
+1. Struktūriniai nuliai (0) NIEKADA NEIMPUTUOJAMI - imputuojamos tik NaN reikšmės.
+2. 0 reikšmės naudojamos kaip TRAIN duomenys (reali informacija), bet NE kaip TEST.
+3. Kategoriniai prediktoriai ('geo', 'year') BE trūkumų - tik enkoduojami.
+4. Synthetic test be leakage (20% TEST be 0 reikšmių).
+5. Prediktorių imputacija (mean) ignoruoja 0 reikšmes.
+6. Naudojama SMAPE metrika (veikia su 0 reikšmėmis).
 
 KODO STRUKTŪRA:
 ---------------
@@ -26,12 +26,12 @@ KODO STRUKTŪRA:
    3.1. Inicializacija (__init__)
    3.2. PUBLIC API (Flask + Jupyter Notebook)
    3.3. Duomenų paruošimas
-   3.4. Geo statistikų skaičiavimas (Feature Engineering)
+   3.4. Geo statistikų skaičiavimas (angl. Feature Engineering)
    3.5. Stulpelio imputavimas
    3.6. Train/Test padalijimas
    3.7. Modelio treniravimas
    3.8. Feature transformacijos
-   3.9. Galutinė imputacija su post-processing
+   3.9. Galutinė imputacija su post-processing (Empirical Bayes Shrinkage metodas)
    3.10. Metrikų skaičiavimas ir saugojimas
 ================================================================================
 """
@@ -136,7 +136,7 @@ class RandomForestImputer:
     """
     Random Forest imputavimas ekonominiams rodikliams.
 
-    Kiekvienam stulpeliui su trūkstamomis reikšmėmis treniruojamas atskiras RF.
+    Kiekvienam stulpeliui su trūkstamomis reikšmėmis treniruojamas atskiras RF modelis.
     Synthetic test: 20% indeksų -> TEST (tik iš eilučių, kur target != 0).
     Po vertinimo pertreniruojama ant 100% žinomų taikinių.
 
@@ -171,10 +171,10 @@ class RandomForestImputer:
         hyperopt_n_iter=30,
         hyperopt_cv=3,
         use_post_processing=True,
-        shrinkage_k=3.0
+        #shrinkage_k=3.0
     ):
         """
-        Inicializuoja Random Forest imputerį.
+        Inicializuoja Random Forest imputer.
 
         Args:
             n_estimators: Medžių skaičius Random Forest modelyje
@@ -183,13 +183,12 @@ class RandomForestImputer:
             min_samples_split: Minimalus pavyzdžių skaičius padalijimui
             min_samples_leaf: Minimalus pavyzdžių skaičius lape
             categorical_cols: Kategorinių stulpelių sąrašas
-            exclude_columns: Stulpeliai, kurie nebus imputuojami
+            exclude_columns: Stulpeliai, kurie nebus imputuojami (galima nurodyti jupyter tyrimo kode)
             cv_folds: Kryžminės validacijos fold'ų skaičius
-            use_hyperopt: Ar naudoti hiperparametrų optimizavimą
+            use_hyperopt: Ar naudoti hiperparametrų optimizavimą (galima nurodyti jupyter tyrimo kode)
             hyperopt_n_iter: Hiperparametrų paieškos iteracijų skaičius
             hyperopt_cv: CV folds hiperparametrų paieškai
-            use_post_processing: Ar naudoti post-processing (Empirical Bayes)
-            shrinkage_k: Shrinkage slenkstis standartiniais nuokrypiais
+            use_post_processing: Ar naudoti post-processing (Empirical Bayes Shrinkage)
         """
         # ----- Baziniai Random Forest parametrai -----
         self.n_estimators = n_estimators
@@ -212,9 +211,9 @@ class RandomForestImputer:
 
         # ----- Post-processing parametrai (Empirical Bayes Shrinkage) -----
         self.use_post_processing = use_post_processing
-        self.shrinkage_k = shrinkage_k
+        
 
-        # ----- Rezultatų saugyklos -----
+        # ----- Rezultatų saugojimas -----
         self.models = {}                # Ištreniruoti modeliai kiekvienam stulpeliui
         self.feature_importance = {}    # Feature svarbumo koeficientai
         self.model_metrics = {}         # Test set metrikos (R², nRMSE, nMAE, sMAPE)
@@ -225,9 +224,9 @@ class RandomForestImputer:
         self.shrinkage_applied = {}     # Post-processing informacija
 
     # ==========================================================================
-    # 3.2. PUBLIC API - FLASK APLIKACIJA
+    # 3.2. PUBLIC API
     # ==========================================================================
-    # Šie metodai naudojami Flask aplikacijoje imputavimui ir rezultatų gavimui
+    # Šie metodai naudojami Flask aplikacijoje ir Jupyter imputavimui ir rezultatų atvaizdavimui
 
     def fit_and_impute(self, df: pd.DataFrame) -> pd.DataFrame:
         """
@@ -237,7 +236,7 @@ class RandomForestImputer:
 
         SVARBU: Naudojame ORIGINALIAS reikšmes kaip features, ne jau imputuotas.
         Tai išvengia "cascade error" problemos, kai vieno stulpelio klaidos
-        persiduoda į kitus stulpelius.
+        persiduoda į kitus stulpelius. https://arxiv.org/pdf/1105.0828
 
         Procesas:
             1. Paruošia DataFrame (kopijuoja, konvertuoja tipus)
@@ -338,8 +337,7 @@ class RandomForestImputer:
             'random_state': self.random_state,
             'cv_folds': self.cv_folds,
             'use_hyperopt': self.use_hyperopt,
-            'use_post_processing': self.use_post_processing,
-            'shrinkage_k': self.shrinkage_k
+            'use_post_processing': self.use_post_processing,   
         }
         if self.use_hyperopt:
             params['hyperopt_n_iter'] = self.hyperopt_n_iter
@@ -419,21 +417,21 @@ class RandomForestImputer:
 
         if self.use_hyperopt:
             print("\nHiperparametru optimizavimas IJUNGTAS")
-            print(f"  - Iteraciju skaicius: {self.hyperopt_n_iter}")
+            print(f"  - Iteraciju skaičius: {self.hyperopt_n_iter}")
             print(f"  - CV folds optimizavimui: {self.hyperopt_cv}")
 
         if self.use_post_processing:
-            print("\nEMPIRICAL BAYES SHRINKAGE POST-PROCESSING IJUNGTAS:")
+            print("\nEMPIRICAL BAYES SHRINKAGE POST-PROCESSING ĮJUNGTAS:")
             print("  Formules:")
             print("    (23) y_EB = (1 - lambda) * y_ML + lambda * y_region")
             print("    (24) lambda = sigma2_ML / (sigma2_ML + sigma2_region)")
             print("  Kur:")
-            print("    - y_ML: RF modelio prognoze (medziu vidurkis)")
+            print("    - y_ML: RF modelio prognozė (medžių vidurkis)")
             print("    - y_region: regiono istorinis vidurkis (su trend korekcija)")
-            print("    - sigma2_ML: RF medziu prognoziu dispersija")
-            print("    - sigma2_region: regiono istoriniu duomenu dispersija")
+            print("    - sigma2_ML: RF medžių prognozių dispersija")
+            print("    - sigma2_region: regiono istorinių duomenų dispersija")
             print("  Safety bounds:")
-            print("    - Ribos ekstremaliu atveju apsaugai")
+            print("    - Ribos ekstremaliu atvejų apsaugai")
 
     def print_best_params(self):
         """
@@ -464,7 +462,7 @@ class RandomForestImputer:
                     print(f"  {param}: min={stats['min']}, max={stats['max']}, "
                           f"vidurkis={stats['mean']:.1f}, mediana={stats['median']:.1f}")
 
-        print(f"\nOptimizuotu rodikliu skaicius: {len(self.best_params)}")
+        print(f"\nOptimizuotų rodiklių skaičius: {len(self.best_params)}")
         print("=" * 80)
 
     def get_cv_metrics_df(self):
@@ -585,7 +583,7 @@ class RandomForestImputer:
         """
         Spausdina suvestinę apie Empirical Bayes Shrinkage post-processing.
 
-        Rodo formules (23) ir (24) taikymo rezultatus:
+        Rodome formules (23) ir (24) taikymo rezultatus:
         - Formulė (23): ŷ_EB = (1 - λ) × ŷ_ML + λ × ȳ_region
         - Formulė (24): λ = σ²_ML / (σ²_ML + σ²_region)
 
@@ -596,7 +594,7 @@ class RandomForestImputer:
             return
 
         print("=" * 90)
-        print("EMPIRICAL BAYES SHRINKAGE SUVESTINE")
+        print("EMPIRICAL BAYES SHRINKAGE SUVESTINĖ")
         print("Formule (23): y_EB = (1 - lambda) * y_ML + lambda * y_region")
         print("Formule (24): lambda = sigma2_ML / (sigma2_ML + sigma2_region)")
         print("=" * 90)
@@ -616,7 +614,7 @@ class RandomForestImputer:
                 all_lambdas.extend(lambdas)
 
                 print(f"\n{target_col}:")
-                print(f"  Imputuotu reiksmiu: {len(adjustments)}")
+                print(f"  Imputuotų reikšmių: {len(adjustments)}")
                 print(f"  Lambda (shrinkage koef.) statistika:")
                 print(f"    - Vidurkis: {np.mean(lambdas):.4f} ({np.mean(lambdas)*100:.2f}%)")
                 print(f"    - Min:      {np.min(lambdas):.4f} ({np.min(lambdas)*100:.2f}%)")
@@ -626,7 +624,7 @@ class RandomForestImputer:
                 # Rodome kelis pavyzdžius
                 examples = adjustments[:3]
                 if examples:
-                    print("  Pavyzdziai:")
+                    print("  Pavyzdžiai:")
                     for adj in examples:
                         geo = adj.get('geo', '?')
                         year = adj.get('year', '?')
@@ -644,7 +642,7 @@ class RandomForestImputer:
 
         print(f"\n" + "-" * 90)
         print(f"BENDRA STATISTIKA:")
-        print(f"  Viso imputuotu reiksmiu: {total_adjustments}")
+        print(f"  Viso imputuotų reikšmių: {total_adjustments}")
         print(f"  Ribos pritaikytos: {bounds_applied_count} atvejams")
         if all_lambdas:
             print(f"  Lambda vidurkis (visi rodikliai): {np.mean(all_lambdas):.4f} ({np.mean(all_lambdas)*100:.2f}%)")
@@ -776,7 +774,7 @@ class RandomForestImputer:
             geo_min = float(valid_data.min())
             geo_std = float(valid_data.std()) if len(valid_data) > 1 else 0.0
 
-            # Trend: linijinės regresijos koeficientas (year vs value)
+            # Trend: linijinės regresijos koeficientas (year ir value)
             geo_trend = 0.0
             if 'year' in df.columns:
                 geo_df = df[(df['geo'] == geo_val) & (df[target_col].notna()) & (df[target_col] != 0)]
@@ -798,7 +796,7 @@ class RandomForestImputer:
 
     def _add_geo_features(self, df: pd.DataFrame, target_col: str, geo_stats: dict) -> pd.DataFrame:
         """
-        Prideda regiono statistikas kaip papildomus features.
+        Prideda regiono statistikas kaip papildomus features. Čia po shrinkage bandome taikyti
 
         Pridedami stulpeliai:
             - _geo_mean: regiono vidurkis
@@ -971,7 +969,7 @@ class RandomForestImputer:
         Sukuria train/test split'ą, filtruojant 0 reikšmes iš test'o.
 
         0 reikšmės grąžinamos į train (reali informacija),
-        bet nenaudojamos test'ui (kad išvengtume šališkumo).
+        bet nenaudojamos test'ui (kad išvengtume šališkumo)->  https://arxiv.org/pdf/2106.04525
 
         Args:
             y_all: Target reikšmės
@@ -1073,10 +1071,10 @@ class RandomForestImputer:
         Procesas:
             1. Padalija duomenis į train/test
             2. Paruošia transformerius ant VISŲ duomenų
-            3. Atlieka hiperparametrų optimizavimą (jei įjungta)
+            3. Atliekame hiperparametrų optimizavimą (jei įjungta)
             4. Treniruoja vertinimo modelį ant TRAIN
             5. Vertina ant TEST
-            6. Atlieka kryžminę validaciją
+            6. Atliekame kryžminę validaciją
             7. Treniruoja galutinį modelį ant 100% duomenų
 
         Args:
@@ -1680,7 +1678,7 @@ class RandomForestImputer:
 
         Args:
             target_col: Target stulpelio pavadinimas
-            model: Ištreniruotas RandomForestRegressor
+            model: Ištreniruotas RandomForestRegressor modelis
             num_cols: Skaitinių stulpelių sąrašas
             cat_cols: Kategorinių stulpelių sąrašas
             num_imputer: Skaitinių stulpelių imputer
